@@ -114,4 +114,5 @@ logs/
 .aws/
 
 # Project-specific
+.claude/
 CLAUDE.md

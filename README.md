@@ -38,8 +38,7 @@ financial-planner/
 ├── frontend/          # React + Vite TypeScript app
 ├── backend/           # FastAPI application
 ├── ml_models/         # Chronos and LSTM forecasting models
-├── docs/              # Project documentation and proposal
-└── CLAUDE.md          # Development guidelines
+└── docs/              # Project documentation and proposal
 ```
 
 ## 🚀 Getting Started
