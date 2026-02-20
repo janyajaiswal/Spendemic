@@ -112,3 +112,6 @@ logs/
 
 # AWS
 .aws/
+
+# Project-specific
+CLAUDE.md
