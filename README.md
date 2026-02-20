@@ -137,10 +137,6 @@ Benchmark model for performance comparison with Chronos. Also outputs MAE and RM
 - CI/CD pipeline
 - Production deployment
 
-## 🤝 Contributing
-
-This is an academic project. For questions or feedback, please contact the project advisor.
-
 ## 📄 License
 
 This project is developed for academic purposes at California State University, Fullerton.
