@@ -119,6 +119,7 @@ class VisaTypeEnum(str, enum.Enum):
     OPT = "OPT"
     CPT = "CPT"
     B1_B2 = "B1_B2"
+    CITIZEN = "CITIZEN"
     OTHER = "OTHER"
     NONE = "NONE"
 
@@ -136,7 +137,7 @@ class User(Base):
 
     # Core Identity
     id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    email: str = Column(String, unique=True, nullable=False, index=True)
+    email: str = Column(String, unique=True, nullable=False)
     name: str = Column(String, nullable=False)
 
     # Financial Profile
@@ -197,26 +198,27 @@ class User(Base):
     email_verified: bool = Column(Boolean, default=False)
 
     # Relationships (models to be created later)
-    transactions = relationship(
-        "Transaction",
-        back_populates="user",
-        cascade="all, delete-orphan"
-    )
-    budgets = relationship(
-        "Budget",
-        back_populates="user",
-        cascade="all, delete-orphan"
-    )
-    goals = relationship(
-        "Goal",
-        back_populates="user",
-        cascade="all, delete-orphan"
-    )
-    alerts = relationship(
-        "Alert",
-        back_populates="user",
-        cascade="all, delete-orphan"
-    )
+    # Commented out until Transaction, Budget, Goal, Alert models are created
+    # transactions = relationship(
+    #     "Transaction",
+    #     back_populates="user",
+    #     cascade="all, delete-orphan"
+    # )
+    # budgets = relationship(
+    #     "Budget",
+    #     back_populates="user",
+    #     cascade="all, delete-orphan"
+    # )
+    # goals = relationship(
+    #     "Goal",
+    #     back_populates="user",
+    #     cascade="all, delete-orphan"
+    # )
+    # alerts = relationship(
+    #     "Alert",
+    #     back_populates="user",
+    #     cascade="all, delete-orphan"
+    # )
 
     # Table Constraints
     __table_args__ = (

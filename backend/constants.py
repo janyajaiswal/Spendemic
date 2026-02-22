@@ -196,6 +196,7 @@ VISA_TYPE_DISPLAY = {
     'OPT': 'OPT (Optional Practical Training)',
     'CPT': 'CPT (Curricular Practical Training)',
     'B1_B2': 'B-1/B-2 Tourist/Business',
+    'CITIZEN': 'U.S. Citizen',
     'OTHER': 'Other',
     'NONE': 'Not Applicable',
 }

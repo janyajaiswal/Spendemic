@@ -82,10 +82,13 @@ class UserCreate(BaseModel):
                 )
         return v
 
-    @field_validator('graduation_date', 'loan_start_date')
+    @field_validator('graduation_date', 'loan_start_date', mode='before')
     @classmethod
-    def validate_dates(cls, v: Optional[date]) -> Optional[date]:
+    def validate_dates(cls, v):
         """Validate dates are not too far in the past."""
+        # Handle empty strings and 'null' string
+        if v in ('', 'null', 'None'):
+            return None
         if v is not None:
             # Optional: Add date range validation if needed
             # For now, just return the value
