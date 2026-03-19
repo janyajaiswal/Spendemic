@@ -15,6 +15,11 @@ from models import (
     ScholarshipFrequencyEnum,
     StudentStatusEnum,
     VisaTypeEnum,
+    TransactionTypeEnum,
+    CategoryEnum,
+    BudgetPeriodEnum,
+    AlertTypeEnum,
+    RecurringFrequencyEnum,
 )
 
 
@@ -104,6 +109,12 @@ class UserUpdate(BaseModel):
     """
     email: Optional[EmailStr] = None
     name: Optional[str] = Field(None, min_length=1, max_length=200)
+    bio: Optional[str] = Field(None, max_length=500)
+    phone_number: Optional[str] = Field(None, max_length=30)
+    country: Optional[str] = Field(None, max_length=100)
+    city: Optional[str] = Field(None, max_length=100)
+    state_province: Optional[str] = Field(None, max_length=100)
+    postal_code: Optional[str] = Field(None, max_length=20)
     home_currency: Optional[CurrencyEnum] = None
     study_country_currency: Optional[CurrencyEnum] = None
     monthly_income: Optional[Decimal] = None
@@ -170,6 +181,13 @@ class UserResponse(BaseModel):
     id: UUID
     email: str
     name: str
+    profile_picture_url: Optional[str] = None
+    bio: Optional[str] = None
+    phone_number: Optional[str] = None
+    country: Optional[str] = None
+    city: Optional[str] = None
+    state_province: Optional[str] = None
+    postal_code: Optional[str] = None
     home_currency: CurrencyEnum
     study_country_currency: CurrencyEnum
     monthly_income: Optional[Decimal] = None
@@ -202,3 +220,163 @@ class UserInDB(UserResponse):
     Can be extended with internal-only fields (e.g., password_hash when auth is added).
     """
     pass
+
+
+# ==================== AUTH SCHEMAS ====================
+
+class GoogleAuthRequest(BaseModel):
+    credential: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
+
+
+class RegisterRequest(BaseModel):
+    """Step 1 of email sign-up — triggers OTP email."""
+    email: EmailStr
+    name: str = Field(..., min_length=2, max_length=200)
+    password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator('name')
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Name cannot be blank")
+        return v
+
+    @field_validator('password')
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        import re
+        if not re.search(r'[A-Z]', v):
+            raise ValueError("Password must contain at least one uppercase letter")
+        if not re.search(r'\d', v):
+            raise ValueError("Password must contain at least one number")
+        if not re.search(r'[^A-Za-z0-9]', v):
+            raise ValueError("Password must contain at least one special character")
+        return v
+
+
+class OTPSentResponse(BaseModel):
+    message: str
+    expires_in_seconds: int = 300
+
+
+class VerifyOTPRequest(BaseModel):
+    """Step 2 of email sign-up — verifies code and creates the user."""
+    email: EmailStr
+    otp_code: str = Field(..., min_length=6, max_length=6)
+
+
+class SignInRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+# ==================== TRANSACTION SCHEMAS ====================
+
+class TransactionCreate(BaseModel):
+    amount: Decimal = Field(..., gt=0, description="Must be positive")
+    currency: CurrencyEnum
+    type: TransactionTypeEnum
+    category: CategoryEnum
+    description: Optional[str] = Field(None, max_length=500)
+    transaction_date: date
+    is_recurring: bool = False
+    recurring_frequency: Optional[RecurringFrequencyEnum] = None
+
+    @field_validator('amount')
+    @classmethod
+    def round_amount(cls, v: Decimal) -> Decimal:
+        return round(v, 2)
+
+
+class TransactionUpdate(BaseModel):
+    amount: Optional[Decimal] = Field(None, gt=0)
+    currency: Optional[CurrencyEnum] = None
+    type: Optional[TransactionTypeEnum] = None
+    category: Optional[CategoryEnum] = None
+    description: Optional[str] = Field(None, max_length=500)
+    transaction_date: Optional[date] = None
+    is_recurring: Optional[bool] = None
+    recurring_frequency: Optional[RecurringFrequencyEnum] = None
+
+    @field_validator('amount')
+    @classmethod
+    def round_amount(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        return round(v, 2) if v is not None else None
+
+
+class TransactionResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    amount: Decimal
+    currency: CurrencyEnum
+    amount_in_usd: Optional[Decimal] = None
+    type: TransactionTypeEnum
+    category: CategoryEnum
+    description: Optional[str] = None
+    transaction_date: date
+    is_recurring: bool
+    recurring_frequency: Optional[RecurringFrequencyEnum] = None
+    recurring_parent_id: Optional[UUID] = None
+    is_generated: bool = False
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TransactionSummary(BaseModel):
+    total_income: Decimal
+    total_expenses: Decimal
+    net: Decimal
+    by_category: dict
+    period_start: date
+    period_end: date
+
+
+# ==================== BUDGET SCHEMAS ====================
+
+class BudgetCreate(BaseModel):
+    category: CategoryEnum
+    limit_amount: Decimal = Field(..., gt=0)
+    currency: CurrencyEnum
+    period: BudgetPeriodEnum = BudgetPeriodEnum.MONTHLY
+    start_date: date
+    end_date: Optional[date] = None
+
+    @field_validator('limit_amount')
+    @classmethod
+    def round_amount(cls, v: Decimal) -> Decimal:
+        return round(v, 2)
+
+
+class BudgetUpdate(BaseModel):
+    limit_amount: Optional[Decimal] = Field(None, gt=0)
+    currency: Optional[CurrencyEnum] = None
+    period: Optional[BudgetPeriodEnum] = None
+    end_date: Optional[date] = None
+    is_active: Optional[bool] = None
+
+
+class BudgetResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    category: CategoryEnum
+    limit_amount: Decimal
+    currency: CurrencyEnum
+    period: BudgetPeriodEnum
+    start_date: date
+    end_date: Optional[date] = None
+    is_active: bool
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+    spent: Optional[Decimal] = None        # computed at query time
+    utilization: Optional[float] = None   # 0.0 - 1.0+
+
+    model_config = ConfigDict(from_attributes=True)

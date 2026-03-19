@@ -2,21 +2,83 @@
 AI Financial Planner - User Management API Endpoints
 CRUD operations for user management
 """
+import uuid as uuid_lib
 from typing import List, Optional
 from uuid import UUID
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
 from database import get_db
 from models import User
 from schemas import UserCreate, UserUpdate, UserResponse
+from routers.auth import get_current_user
+
+UPLOADS_DIR = Path(__file__).parent.parent / "uploads" / "avatars"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
+MAX_AVATAR_BYTES = 5 * 1024 * 1024  # 5 MB
 
 router = APIRouter(
     prefix="/api/v1/users",
     tags=["users"]
 )
+
+
+# ==================== CURRENT USER (JWT-protected) — must be before /{user_id} ====================
+
+@router.get("/me", response_model=UserResponse, summary="Get my profile")
+async def get_me(current_user: User = Depends(get_current_user)) -> UserResponse:
+    return current_user
+
+
+@router.put("/me", response_model=UserResponse, summary="Update my profile")
+async def update_me(
+    user_update: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    update_data = user_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(current_user, field, value)
+    try:
+        db.commit()
+        db.refresh(current_user)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already in use")
+    return current_user
+
+
+@router.post("/me/avatar", response_model=UserResponse, summary="Upload profile picture")
+async def upload_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    if file.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported file type. Allowed: jpeg, png, gif, webp",
+        )
+    contents = await file.read()
+    if len(contents) > MAX_AVATAR_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Image must be under 5 MB",
+        )
+    ext = file.content_type.split("/")[1].replace("jpeg", "jpg")
+    filename = f"{current_user.id}.{ext}"
+    dest = UPLOADS_DIR / filename
+    dest.write_bytes(contents)
+    base_url = str(request.base_url).rstrip("/")
+    current_user.profile_picture_url = f"{base_url}/uploads/avatars/{filename}"
+    db.commit()
+    db.refresh(current_user)
+    return current_user
 
 
 # ==================== CREATE USER ====================
@@ -345,3 +407,4 @@ async def reactivate_user(
     db.refresh(db_user)
 
     return db_user
+
