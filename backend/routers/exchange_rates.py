@@ -20,7 +20,8 @@ _API_KEY = os.getenv("EXCHANGE_RATE_API_KEY", "")
 _PLACEHOLDER = {"", "your_api_key_here"}
 _CACHE_TTL = timedelta(hours=1)
 
-# Hardcoded approximate rates vs USD for offline/dev mode (updated periodically)
+# Static fallback rates vs USD — used ONLY when EXCHANGE_RATE_API_KEY is not set or the API call fails.
+# These are NOT auto-updated. With a valid API key, live rates are fetched and cached in the DB instead.
 _FALLBACK_RATES: dict[str, float] = {
     "USD": 1.0, "EUR": 0.92, "GBP": 0.79, "JPY": 149.5, "CNY": 7.24,
     "INR": 83.1, "CAD": 1.36, "AUD": 1.53, "CHF": 0.90, "SEK": 10.42,

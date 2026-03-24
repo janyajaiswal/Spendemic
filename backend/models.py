@@ -267,6 +267,7 @@ class User(Base):
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     budgets = relationship("Budget", back_populates="user", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
+    forecast_contexts = relationship("ForecastContext", back_populates="user", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_users_email", "email"),
@@ -483,6 +484,54 @@ class Alert(Base):
             f"<Alert(id={self.id}, user_id={self.user_id}, "
             f"type={self.alert_type}, threshold={self.threshold_value})>"
         )
+
+
+# ==================== FORECAST CONTEXT ====================
+
+class ForecastContext(Base):
+    """
+    Monthly covariate data per user for Chronos-2 forecasting.
+    One row per (user, year, month). Used to inject domain knowledge
+    (rent, work hours, breaks, travel) into the ML forecast.
+    """
+    __tablename__ = "forecast_context"
+
+    id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: UUID = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    year: int = Column(Integer, nullable=False)
+    month: int = Column(Integer, nullable=False)  # 1–12
+
+    # Covariate fields
+    hours_per_week: Optional[float] = Column(Numeric(5, 1), nullable=True)
+    is_working: bool = Column(Boolean, default=True, nullable=False)
+    is_summer_break: bool = Column(Boolean, default=False, nullable=False)
+    is_winter_break: bool = Column(Boolean, default=False, nullable=False)
+    travel_home: bool = Column(Boolean, default=False, nullable=False)
+    travel_cost: Optional[float] = Column(Numeric(10, 2), nullable=True)  # actual flight cost
+    tuition_due: Optional[float] = Column(Numeric(10, 2), nullable=True)
+    scholarship_received: Optional[float] = Column(Numeric(10, 2), nullable=True)
+    exchange_rate: Optional[float] = Column(Numeric(10, 6), nullable=True)
+    health_insurance: bool = Column(Boolean, default=False, nullable=False)
+    rent: Optional[float] = Column(Numeric(10, 2), nullable=True)
+
+    created_at: datetime = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Optional[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
+
+    user = relationship("User", back_populates="forecast_contexts")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "year", "month", name="uq_forecast_context_user_month"),
+        Index("ix_forecast_context_user_id", "user_id"),
+        Index("ix_forecast_context_user_year", "user_id", "year"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<ForecastContext(user={self.user_id}, {self.year}-{self.month:02d})>"
 
 
 # ==================== EXCHANGE RATE CACHE ====================

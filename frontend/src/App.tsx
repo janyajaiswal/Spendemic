@@ -6,7 +6,9 @@ import Landing from './pages/Landing';
 import Auth from './pages/Auth';
 import Settings from './pages/Settings';
 import Transactions from './pages/Transactions';
-import Placeholder from './pages/Placeholder';
+import Budgets from './pages/Budgets';
+import Dashboard from './pages/Dashboard';
+import Reports from './pages/Reports';
 import './App.css';
 
 const GOOGLE_CLIENT_ID = '693710411372-63m1l5lqh390jll6lqgpci97d4hi0i7l.apps.googleusercontent.com';
@@ -22,10 +24,10 @@ function App() {
               <Routes>
                 <Route path="/" element={<Landing />} />
                 <Route path="/auth" element={<Auth />} />
-                <Route path="/dashboard" element={<Placeholder title="Dashboard" />} />
-                <Route path="/budgets" element={<Placeholder title="Budgets" />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/budgets" element={<Budgets />} />
                 <Route path="/expenses" element={<Transactions />} />
-                <Route path="/reports" element={<Placeholder title="Reports" />} />
+                <Route path="/reports" element={<Reports />} />
                 <Route path="/settings" element={<Settings />} />
               </Routes>
             </div>

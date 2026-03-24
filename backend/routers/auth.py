@@ -47,8 +47,14 @@ def get_current_user(
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub", "")
+        jti: str = payload.get("jti", "")
     except Exception:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    # Check revocation
+    if jti:
+        session = db.query(UserSession).filter(UserSession.jti == jti).first()
+        if session and session.is_revoked:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
     db_user = db.query(User).filter(User.id == user_id).first()
     if not db_user or not db_user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
@@ -398,3 +404,25 @@ async def signin(
         token_type="bearer",
         user=UserResponse.model_validate(db_user),
     )
+
+
+@router.post("/logout", status_code=204)
+async def logout(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> None:
+    """Revoke the current JWT so it cannot be reused after logout."""
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header.split(" ", 1)[1] if " " in auth_header else ""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        jti: str = payload.get("jti", "")
+        if jti:
+            session = db.query(UserSession).filter(UserSession.jti == jti).first()
+            if session:
+                session.is_revoked = True
+                session.revoked_at = datetime.now(timezone.utc)
+                db.commit()
+    except Exception:
+        pass

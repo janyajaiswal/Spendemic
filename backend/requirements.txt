@@ -11,3 +11,8 @@ passlib[bcrypt]
 bcrypt<4.0
 python-multipart
 python-dateutil
+openpyxl
+pandas
+anthropic
+torch
+git+https://github.com/amazon-science/chronos-forecasting.git

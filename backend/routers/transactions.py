@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import Transaction, TransactionTypeEnum, CategoryEnum, RecurringFrequencyEnum
 from routers.auth import get_current_user
+from routers.exchange_rates import _FALLBACK_RATES
 from schemas import TransactionCreate, TransactionUpdate, TransactionResponse, TransactionSummary
 
 router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
@@ -24,6 +25,12 @@ router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
 # ──────────────────────────────────────────────
 # Helpers
 # ──────────────────────────────────────────────
+
+def _to_usd(amount: Decimal, currency: str) -> Decimal:
+    """Convert amount to USD using fallback rates (rate = units per 1 USD)."""
+    rate = _FALLBACK_RATES.get(currency.upper(), 1.0)
+    return round(amount / Decimal(str(rate)), 2)
+
 
 def _next_occurrence(current: date, freq: RecurringFrequencyEnum) -> date:
     if freq == RecurringFrequencyEnum.DAILY:
@@ -68,6 +75,7 @@ def _materialize_recurring(user_id: UUID, through: date, db: Session) -> None:
                         user_id=user_id,
                         amount=tmpl.amount,
                         currency=tmpl.currency,
+                        amount_in_usd=_to_usd(Decimal(str(tmpl.amount)), tmpl.currency.value),
                         type=tmpl.type,
                         category=tmpl.category,
                         description=tmpl.description,
@@ -111,6 +119,7 @@ def create_transaction(
         user_id=current_user.id,
         amount=body.amount,
         currency=body.currency,
+        amount_in_usd=_to_usd(Decimal(str(body.amount)), body.currency),
         type=body.type,
         category=body.category,
         description=body.description,

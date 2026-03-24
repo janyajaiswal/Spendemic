@@ -91,6 +91,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const token = stored ? (JSON.parse(stored) as GoogleUser).accessToken : undefined;
+    if (token) {
+      fetch(`${API_BASE}/api/v1/auth/logout`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+      }).catch(() => {});
+    }
     setUser(null);
     localStorage.removeItem(STORAGE_KEY);
   }, []);

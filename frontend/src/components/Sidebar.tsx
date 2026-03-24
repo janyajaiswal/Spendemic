@@ -1,7 +1,18 @@
 import { NavLink, Link } from 'react-router-dom';
-import { LayoutDashboard, Wallet, CreditCard, TrendingUp, Settings, LogIn, LogOut } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { LayoutDashboard, Wallet, CreditCard, TrendingUp, Settings, LogIn, LogOut, Bell } from 'lucide-react';
 import { googleLogout } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
+
+const API = 'http://localhost:8000/api/v1';
+
+interface AlertItem {
+  budget_id: string;
+  category: string;
+  type: 'BUDGET_EXCEEDED' | 'APPROACHING_LIMIT';
+  message: string;
+  utilization: number;
+}
 
 const navigationItems = [
   { label: 'Dashboard', path: '/dashboard', Icon: LayoutDashboard },
@@ -13,6 +24,28 @@ const navigationItems = [
 
 export default function Sidebar() {
   const { user, logout, isAuthenticated } = useAuth();
+  const [alertItems, setAlertItems] = useState<AlertItem[]>([]);
+  const [bellOpen, setBellOpen] = useState(false);
+  const bellRef = useRef<HTMLDivElement>(null);
+
+  // Fetch alerts whenever user changes (login/logout)
+  useEffect(() => {
+    const token = user?.accessToken;
+    if (!token) { setAlertItems([]); return; }
+    fetch(`${API}/alerts`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then((data: AlertItem[]) => setAlertItems(data))
+      .catch(() => {});
+  }, [user]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (bellRef.current && !bellRef.current.contains(e.target as Node)) setBellOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
 
   const handleLogout = () => {
     googleLogout();
@@ -54,6 +87,33 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      {isAuthenticated && alertItems.length > 0 && (
+        <div ref={bellRef} style={{ position: 'relative' }}>
+          <button
+            style={styles.bellBtn}
+            onClick={() => setBellOpen(o => !o)}
+            title={`${alertItems.length} budget alert${alertItems.length > 1 ? 's' : ''}`}
+          >
+            <Bell size={18} />
+            <span style={styles.bellBadge}>{alertItems.length}</span>
+          </button>
+          {bellOpen && (
+            <div style={styles.bellDropdown}>
+              {alertItems.map((a, i) => (
+                <div key={i} style={{
+                  ...styles.bellItem,
+                  borderLeft: `3px solid ${a.type === 'BUDGET_EXCEEDED' ? '#f87171' : '#fbbf24'}`,
+                }}>
+                  <span style={{ fontSize: '0.8em', fontWeight: 600, color: a.type === 'BUDGET_EXCEEDED' ? '#f87171' : '#fbbf24' }}>
+                    {a.type === 'BUDGET_EXCEEDED' ? '🔴' : '🟡'} {a.message}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {isAuthenticated && user ? (
         <div style={styles.userSection}>
@@ -283,5 +343,30 @@ const styles = {
     color: 'var(--brand-rose)',
     margin: 0,
     opacity: 0.7,
+  },
+  bellBtn: {
+    position: 'relative' as const,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.3)',
+    borderRadius: '10px', padding: '10px', cursor: 'pointer',
+    color: 'var(--brand-gold)', width: '100%',
+  },
+  bellBadge: {
+    position: 'absolute' as const, top: 6, right: 6,
+    background: '#f87171', color: '#fff',
+    borderRadius: '50%', width: '16px', height: '16px',
+    fontSize: '0.65em', fontWeight: 700,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  bellDropdown: {
+    position: 'absolute' as const, bottom: '110%', left: 0, right: 0,
+    background: '#1a0a0e', border: '1px solid rgba(255,215,0,0.2)',
+    borderRadius: '10px', padding: '8px',
+    display: 'flex', flexDirection: 'column' as const, gap: '6px',
+    zIndex: 999, boxShadow: '0 4px 20px rgba(0,0,0,0.6)',
+  },
+  bellItem: {
+    padding: '8px 10px', borderRadius: '6px',
+    background: 'rgba(255,255,255,0.04)',
   },
 };

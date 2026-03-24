@@ -380,3 +380,103 @@ class BudgetResponse(BaseModel):
     utilization: Optional[float] = None   # 0.0 - 1.0+
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== FORECAST CONTEXT SCHEMAS ====================
+
+class ForecastContextUpsert(BaseModel):
+    """Create or update covariate values for a single month."""
+    hours_per_week: Optional[float] = Field(None, ge=0, le=168)
+    is_working: bool = True
+    is_summer_break: bool = False
+    is_winter_break: bool = False
+    travel_home: bool = False
+    travel_cost: Optional[float] = Field(None, ge=0)  # actual flight/travel cost
+    tuition_due: Optional[float] = Field(None, ge=0)
+    scholarship_received: Optional[float] = Field(None, ge=0)
+    exchange_rate: Optional[float] = Field(None, gt=0)
+    health_insurance: bool = False
+    rent: Optional[float] = Field(None, ge=0)
+
+
+class ForecastContextResponse(ForecastContextUpsert):
+    id: UUID
+    user_id: UUID
+    year: int
+    month: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ForecastContextBulkCopy(BaseModel):
+    """Copy one month's values to a list of target (year, month) pairs."""
+    source_year: int
+    source_month: int = Field(..., ge=1, le=12)
+    targets: List[dict]  # [{"year": 2026, "month": 4}, ...]
+
+
+# ==================== FORECAST REQUEST / RESPONSE ====================
+
+class ForecastMonthInput(BaseModel):
+    """
+    Covariate data for one future month.
+    year + month identify which calendar month this applies to.
+    All spending-related fields are required (no assumed defaults) —
+    only provide what you know; omit the rest and the model will use
+    your historical spending pattern as the baseline.
+    """
+    year: int = Field(..., ge=2000, le=2100)
+    month: int = Field(..., ge=1, le=12)
+    rent: Optional[float] = Field(None, ge=0, description="Monthly rent in USD")
+    tuition_due: Optional[float] = Field(None, ge=0, description="Tuition payment due this month")
+    scholarship_received: Optional[float] = Field(None, ge=0, description="Scholarship credit this month")
+    travel_home: bool = Field(False, description="Flying home this month?")
+    travel_cost: Optional[float] = Field(None, ge=0, description="Actual round-trip cost if travel_home=true")
+    is_summer_break: bool = False
+    is_winter_break: bool = False
+    is_working: bool = True
+    hours_per_week: Optional[float] = Field(None, ge=0, le=168)
+
+
+class ForecastRequest(BaseModel):
+    """
+    Inline forecast request — provide the future months you want
+    predicted, plus how many months back of your own transaction
+    history to include (default: all available).
+    """
+    months: List[ForecastMonthInput] = Field(
+        ...,
+        min_length=1,
+        max_length=60,
+        description="Ordered list of future months to forecast (oldest first).",
+    )
+    history_months: Optional[int] = Field(
+        None, ge=1, le=120,
+        description="Limit history to last N months (omit = use all available).",
+    )
+
+
+class ForecastHistoryPoint(BaseModel):
+    year: int
+    month: int
+    total: float
+    synthetic: bool = False
+
+
+class ForecastPrediction(BaseModel):
+    month_offset: int
+    year: int
+    month: int
+    lower: float
+    median: float
+    upper: float
+
+
+class ForecastResponse(BaseModel):
+    history: List[ForecastHistoryPoint]
+    predictions: List[ForecastPrediction]
+    prediction_months: int
+    graduation_date: Optional[str] = None
+    warnings: List[str] = []

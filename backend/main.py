@@ -2,7 +2,12 @@
 AI Financial Planner - FastAPI Backend
 Main application entry point
 """
+import os
+import sys
+import threading
+from contextlib import asynccontextmanager
 from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -10,8 +15,37 @@ from fastapi.staticfiles import StaticFiles
 from routers import users, auth
 from routers import transactions
 from routers import exchange_rates
+from routers import budgets
+from routers import alerts
+from routers import forecast_context
+from routers import forecast
+from routers import import_transactions
+
+# ---------------------------------------------------------------------------
+# Load the Chronos-2 model once at startup (background thread so the server
+# is immediately reachable while the ~500 MB model finishes loading)
+# ---------------------------------------------------------------------------
+
+def _load_ml_model_bg() -> None:
+    _ml_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "ml_models"))
+    if _ml_path not in sys.path:
+        sys.path.insert(0, _ml_path)
+    try:
+        import chronos_model
+        chronos_model.load_model()
+    except Exception as exc:
+        print(f"[startup] WARNING: Chronos-2 model failed to load: {exc}", flush=True)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    t = threading.Thread(target=_load_ml_model_bg, daemon=True)
+    t.start()
+    yield
+
 
 app = FastAPI(
+    lifespan=lifespan,
     title="AI Financial Planner API",
     description="API for international student budgeting with time-series forecasting",
     version="1.0.0",
@@ -37,6 +71,11 @@ app.include_router(users.router)
 app.include_router(auth.router)
 app.include_router(transactions.router)
 app.include_router(exchange_rates.router)
+app.include_router(budgets.router)
+app.include_router(alerts.router)
+app.include_router(forecast_context.router)
+app.include_router(forecast.router)
+app.include_router(import_transactions.router)
 
 # Serve uploaded files (avatars, etc.)
 _uploads_dir = Path(__file__).parent / "uploads"
