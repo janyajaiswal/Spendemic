@@ -10,15 +10,22 @@ cached in _PIPELINE so every request reuses the same loaded weights.
 Covariate dictionary keys (all optional, pass 0 / False if unknown)
 --------------------------------------------------------------------
   hours_per_week      : float   — CPT/OPT weekly work hours
+  hourly_rate         : float   — pay rate ($/hr); income derived = rate × hours × (52/12)
+  break_hourly_rate   : float   — reduced rate during break period
+  break_hours_per_week: float   — reduced hours/week during break period
   is_working          : 0 or 1  — will the user have income that month?
   is_summer_break     : 0 or 1
   is_winter_break     : 0 or 1
   travel_home         : 0 or 1  — flying home → large one-off expense spike
+  travel_cost         : float   — actual round-trip travel cost if travel_home=1
   tuition_due         : float   — semester tuition amount (0 if none)
   scholarship_received: float   — expected scholarship credit (0 if none)
   exchange_rate       : float   — USD per 1 unit of home currency
   health_insurance    : 0 or 1  — enrollment month (Fall/Spring)
   rent                : float   — that month's rent amount
+  income_amount       : float   — actual monthly income in USD (auto-derived if hourly_rate set)
+  food_estimate       : float   — estimated monthly food/grocery spend
+  utilities_estimate  : float   — estimated monthly utilities (phone, internet, etc.)
 """
 
 from __future__ import annotations
@@ -42,15 +49,22 @@ _MODEL_ID = "amazon/chronos-2"
 # Ordered list of covariate keys — order must be consistent everywhere
 COVARIATE_KEYS = [
     "hours_per_week",
+    "hourly_rate",
+    "break_hourly_rate",
+    "break_hours_per_week",
     "is_working",
     "is_summer_break",
     "is_winter_break",
     "travel_home",
+    "travel_cost",
     "tuition_due",
     "scholarship_received",
     "exchange_rate",
     "health_insurance",
     "rent",
+    "income_amount",
+    "food_estimate",
+    "utilities_estimate",
 ]
 
 
@@ -224,15 +238,145 @@ def _apply_covariates(
         delta += float(cov.get("travel_home", 0)) * (travel_cost if travel_cost > 0 else 1200.0)
         delta += float(cov.get("tuition_due", 0))
         delta -= float(cov.get("scholarship_received", 0))
-        delta -= float(cov.get("is_working", 0)) * 200.0
-        delta -= float(cov.get("is_summer_break", 0)) * 300.0
-        delta -= float(cov.get("is_winter_break", 0)) * 200.0
+        # Income: use actual amount if provided, else fall back to is_working boolean proxy
+        income = float(cov.get("income_amount", 0))
+        if income > 0:
+            # Higher income slightly dampens discretionary spending pressure
+            delta -= min(income * 0.08, 300.0)
+        else:
+            delta -= float(cov.get("is_working", 0)) * 150.0
+        summer_reduction = max(300.0, base * 0.15)
+        delta -= float(cov.get("is_summer_break", 0)) * summer_reduction
+        winter_reduction = max(200.0, base * 0.10)
+        delta -= float(cov.get("is_winter_break", 0)) * winter_reduction
         delta += float(cov.get("health_insurance", 0)) * 150.0
         extra_hours = max(float(cov.get("hours_per_week", 10)) - 10, 0)
         delta -= extra_hours * 8.0
         rent = float(cov.get("rent", 0))
         if rent > 0:
-            delta += rent  # treat rent as a known fixed contribution
+            delta += rent  # known fixed cost
+        # Add known recurring estimates that anchor the spend level
+        delta += float(cov.get("food_estimate", 0))
+        delta += float(cov.get("utilities_estimate", 0))
+        rate = float(cov.get("exchange_rate", 1.0))
+        adjusted = max((base + delta) * (rate if rate > 0 else 1.0), 0.0)
+        anchors.append(round(adjusted, 2))
+
+    return history + anchors
+
+
+# ---------------------------------------------------------------------------
+# Weekly forecast — same Chronos-2 pipeline, weekly granularity
+# ---------------------------------------------------------------------------
+
+_WEEKS_PER_MONTH = 52 / 12  # exact: 4.3333... weeks per month
+
+
+def forecast_weekly(
+    history: list[float],
+    weekly_covariates: list[dict] | None = None,
+    prediction_weeks: int = 8,
+) -> list[dict]:
+    """
+    Forecast weekly spending for the next `prediction_weeks` weeks.
+
+    Parameters
+    ----------
+    history : list[float]
+        Weekly spending totals in chronological order (oldest first).
+        Each value is one ISO week's total expenses in USD.
+
+    weekly_covariates : list[dict] or None
+        One dict per forecast week (length == prediction_weeks).
+        Monthly covariate dollar amounts must already be divided by 4.33
+        by the caller before being passed here.
+
+    prediction_weeks : int
+        How many weeks ahead to forecast (1–52).
+    """
+    if _PIPELINE is None:
+        raise RuntimeError("Model not loaded. Call load_model() first.")
+
+    if len(history) < 1:
+        raise ValueError(
+            "No weekly spending history available. "
+            "Log some transactions or fill in Forecast Setup."
+        )
+
+    adjusted = _apply_covariates_weekly(history, weekly_covariates or [], prediction_weeks)
+    context = torch.tensor(adjusted, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
+
+    quantiles, _ = _PIPELINE.predict_quantiles(
+        inputs=context,
+        prediction_length=prediction_weeks,
+        quantile_levels=[0.1, 0.5, 0.9],
+    )
+    q = quantiles[0].squeeze().numpy()
+    if q.ndim == 3:
+        q = q[0]
+
+    results = []
+    for i in range(prediction_weeks):
+        results.append({
+            "week_offset": i + 1,
+            "lower":  float(round(max(float(q[i, 0]), 0.0), 2)),
+            "median": float(round(max(float(q[i, 1]), 0.0), 2)),
+            "upper":  float(round(max(float(q[i, 2]), 0.0), 2)),
+        })
+    return results
+
+
+def _apply_covariates_weekly(
+    history: list[float],
+    weekly_covariates: list[dict],
+    prediction_weeks: int,
+) -> list[float]:
+    """
+    Encode per-week covariates as anchor points appended to history.
+    All dollar amounts in weekly_covariates are assumed to already be
+    divided by 4.33 (done by the caller in _run_from_db_weekly).
+
+    Weekly heuristic weights (proportional to monthly weights / (52/12)):
+      travel_home         → +$276.92 one-off spike (1 200 / (52/12))
+      tuition_due         → added directly (already weekly-scaled)
+      scholarship_received→ subtracted
+      income_amount       → −$0.08 × income capped at $69.23/wk (300 / (52/12))
+      is_working          → −$34.62 proxy if no income_amount (150 / (52/12))
+      is_summer_break     → −max(69.23, base×0.15)/wk  (scales with user's spending)
+      is_winter_break     → −max(46.15, base×0.10)/wk
+      health_insurance    → +$34.62/wk  (150 / (52/12))
+      hours_per_week      → −$1.85/hr above 10 h/wk  (8 / (52/12))
+      rent / food / utils → added directly (already weekly-scaled)
+    """
+    if not weekly_covariates:
+        return history
+
+    base = history[-1] if history else round(1000.0 / _WEEKS_PER_MONTH, 2)  # 230.77
+    anchors: list[float] = []
+
+    for cov in weekly_covariates[:prediction_weeks]:
+        delta = 0.0
+        travel_cost = float(cov.get("travel_cost") or 0)
+        delta += float(cov.get("travel_home", 0)) * (travel_cost if travel_cost > 0 else round(1200.0 / _WEEKS_PER_MONTH, 2))
+        delta += float(cov.get("tuition_due", 0))
+        delta -= float(cov.get("scholarship_received", 0))
+        income = float(cov.get("income_amount", 0))
+        if income > 0:
+            delta -= min(income * 0.08, round(300.0 / _WEEKS_PER_MONTH, 2))  # ~69.23
+        else:
+            delta -= float(cov.get("is_working", 0)) * round(150.0 / _WEEKS_PER_MONTH, 2)
+        summer_reduction = max(round(300.0 / _WEEKS_PER_MONTH, 2), base * 0.15)
+        delta -= float(cov.get("is_summer_break", 0)) * summer_reduction
+        winter_reduction = max(round(200.0 / _WEEKS_PER_MONTH, 2), base * 0.10)
+        delta -= float(cov.get("is_winter_break", 0)) * winter_reduction
+        delta += float(cov.get("health_insurance", 0)) * round(150.0 / _WEEKS_PER_MONTH, 2)
+        extra_hours = max(float(cov.get("hours_per_week", 10)) - 10, 0)
+        delta -= extra_hours * round(8.0 / _WEEKS_PER_MONTH, 3)  # ~1.846
+        rent = float(cov.get("rent", 0))
+        if rent > 0:
+            delta += rent
+        delta += float(cov.get("food_estimate", 0))
+        delta += float(cov.get("utilities_estimate", 0))
         rate = float(cov.get("exchange_rate", 1.0))
         adjusted = max((base + delta) * (rate if rate > 0 else 1.0), 0.0)
         anchors.append(round(adjusted, 2))

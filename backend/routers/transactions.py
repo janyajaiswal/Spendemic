@@ -17,7 +17,7 @@ from database import get_db
 from models import Transaction, TransactionTypeEnum, CategoryEnum, RecurringFrequencyEnum
 from routers.auth import get_current_user
 from routers.exchange_rates import _FALLBACK_RATES
-from schemas import TransactionCreate, TransactionUpdate, TransactionResponse, TransactionSummary
+from schemas import TransactionCreate, TransactionUpdate, TransactionResponse, TransactionSummary, WeeklyTransactionSummary
 
 router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
 
@@ -218,6 +218,42 @@ def get_summary(
     )
 
 
+@router.get("/weekly-summary", response_model=list[WeeklyTransactionSummary])
+def get_weekly_summary(
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[WeeklyTransactionSummary]:
+    """Return weekly expense totals grouped by ISO week number."""
+    from models import TransactionTypeEnum as TTE
+    q = (
+        db.query(
+            extract("isoyear", Transaction.transaction_date).label("iso_year"),
+            extract("week",    Transaction.transaction_date).label("iso_week"),
+            func.min(Transaction.transaction_date).label("week_start"),
+            func.max(Transaction.transaction_date).label("week_end"),
+            func.sum(func.coalesce(Transaction.amount_in_usd, Transaction.amount)).label("total"),
+        )
+        .filter(
+            Transaction.user_id == current_user.id,
+            Transaction.type == TTE.EXPENSE,
+        )
+    )
+    if year:
+        q = q.filter(extract("isoyear", Transaction.transaction_date) == year)
+    rows = q.group_by("iso_year", "iso_week").order_by("iso_year", "iso_week").all()
+    return [
+        WeeklyTransactionSummary(
+            year=int(r.iso_year),
+            week=int(r.iso_week),
+            week_start=r.week_start,
+            week_end=r.week_end,
+            total=float(round(r.total, 2)),
+        )
+        for r in rows
+    ]
+
+
 @router.get("/{transaction_id}", response_model=TransactionResponse)
 def get_transaction(
     transaction_id: UUID,
@@ -240,6 +276,21 @@ def update_transaction(
     db.commit()
     db.refresh(tx)
     return tx
+
+
+@router.delete("", status_code=200)
+def delete_all_transactions(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Delete every transaction belonging to the current user. Returns count deleted."""
+    deleted = (
+        db.query(Transaction)
+        .filter(Transaction.user_id == current_user.id)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"deleted": deleted}
 
 
 @router.delete("/{transaction_id}", status_code=204)

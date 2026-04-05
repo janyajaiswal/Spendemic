@@ -10,6 +10,9 @@ const API = 'http://localhost:8000/api/v1';
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface FcData {
   hours_per_week: string;
+  hourly_rate: string;           // $/hr — monthly income = rate × hours × (52/12)
+  break_hourly_rate: string;     // reduced rate during break
+  break_hours_per_week: string;  // reduced hours during break
   is_working: boolean;
   is_summer_break: boolean;
   is_winter_break: boolean;
@@ -18,12 +21,15 @@ interface FcData {
   tuition_due: string;
   scholarship_received: string;
   rent: string;
+  food_estimate: string;
+  utilities_estimate: string;
 }
 
 const EMPTY_FC: FcData = {
-  hours_per_week: '', is_working: true, is_summer_break: false,
-  is_winter_break: false, travel_home: false, travel_cost: '',
-  tuition_due: '', scholarship_received: '', rent: '',
+  hours_per_week: '', hourly_rate: '', break_hourly_rate: '', break_hours_per_week: '',
+  is_working: true, is_summer_break: false, is_winter_break: false,
+  travel_home: false, travel_cost: '', tuition_due: '', scholarship_received: '',
+  rent: '', food_estimate: '', utilities_estimate: '',
 };
 
 type TxType = 'INCOME' | 'EXPENSE';
@@ -104,7 +110,7 @@ export default function Transactions() {
   const authHdr = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
   const today = new Date();
-  const [filterType, setFilterType] = useState<TxType | 'ALL'>('ALL');
+  const [filterType, setFilterType] = useState<TxType | 'ALL' | 'RECURRING'>('ALL');
   const [filterMonth, setFilterMonth] = useState(today.getMonth() + 1);
   const [filterYear, setFilterYear] = useState(today.getFullYear());
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -123,6 +129,14 @@ export default function Transactions() {
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [dupWarning, setDupWarning] = useState<{ existing: Transaction } | null>(null);
+  const pendingSavePayloadRef = useRef<object | null>(null);
+  const [deleteAllOpen, setDeleteAllOpen] = useState(false);
+  const [deleteAllConfirmText, setDeleteAllConfirmText] = useState('');
+  const [deleteAllLoading, setDeleteAllLoading] = useState(false);
+  const [resetFcOpen, setResetFcOpen] = useState(false);
+  const [resetFcConfirmText, setResetFcConfirmText] = useState('');
+  const [resetFcLoading, setResetFcLoading] = useState(false);
 
   // Scenario planner
   const [scenarioOpen, setScenarioOpen] = useState(false);
@@ -141,6 +155,7 @@ export default function Transactions() {
   const [fcContexts, setFcContexts] = useState<Record<string, FcData>>({});
   const [fcForm, setFcForm] = useState<FcData>(EMPTY_FC);
   const [fcSaving, setFcSaving] = useState(false);
+  const [workingWarnOpen, setWorkingWarnOpen] = useState(false);
   const [fcCopyOpen, setFcCopyOpen] = useState(false);
   const [fcCopyYear, setFcCopyYear] = useState(today.getFullYear());
   const [fcCopyMonths, setFcCopyMonths] = useState<boolean[]>(Array(12).fill(false));
@@ -179,6 +194,9 @@ export default function Transactions() {
       for (const item of data) {
         map[`${item.year}-${item.month}`] = {
           hours_per_week: item.hours_per_week != null ? String(item.hours_per_week) : '',
+          hourly_rate: item.hourly_rate != null ? String(item.hourly_rate) : '',
+          break_hourly_rate: item.break_hourly_rate != null ? String(item.break_hourly_rate) : '',
+          break_hours_per_week: item.break_hours_per_week != null ? String(item.break_hours_per_week) : '',
           is_working: Boolean(item.is_working),
           is_summer_break: Boolean(item.is_summer_break),
           is_winter_break: Boolean(item.is_winter_break),
@@ -187,6 +205,8 @@ export default function Transactions() {
           tuition_due: item.tuition_due != null ? String(item.tuition_due) : '',
           scholarship_received: item.scholarship_received != null ? String(item.scholarship_received) : '',
           rent: item.rent != null ? String(item.rent) : '',
+          food_estimate: item.food_estimate != null ? String(item.food_estimate) : '',
+          utilities_estimate: item.utilities_estimate != null ? String(item.utilities_estimate) : '',
         };
       }
       setFcContexts(map);
@@ -202,19 +222,63 @@ export default function Transactions() {
     setFcForm(fcContexts[key] ?? { ...EMPTY_FC });
   };
 
+  const JOB_CATS: Category[] = ['SALARY', 'STIPEND', 'FREELANCE'];
+
+  const handleIsWorkingToggle = async (checked: boolean) => {
+    if (!checked) {
+      // Check if there are job-related income transactions for the selected forecast month
+      try {
+        const params = new URLSearchParams({ year: String(fcYear), month: String(fcMonth), type: 'INCOME', limit: '50' });
+        const res = await fetch(`${API}/transactions?${params}`, { headers: authHdr });
+        if (res.ok) {
+          const data = await res.json() as Transaction[];
+          if (data.some(t => JOB_CATS.includes(t.category))) {
+            setWorkingWarnOpen(true);
+            return; // Hold — wait for user confirmation
+          }
+        }
+      } catch { /* silent */ }
+    }
+    if (checked) {
+      setFcForm(f => ({ ...f, is_working: true }));
+    } else {
+      setFcForm(f => ({ ...f, is_working: false, hours_per_week: '', hourly_rate: '' }));
+    }
+  };
+
+  const _WEEKS_PER_MONTH = 52 / 12; // exact: 4.3333...
+
+  /** Compute income_amount from hourly rate × hours × (52/12), or from break rate if on break */
+  const _computedIncome = (): number | null => {
+    const onBreak = fcForm.is_summer_break || fcForm.is_winter_break;
+    if (onBreak && fcForm.break_hourly_rate && fcForm.break_hours_per_week)
+      return parseFloat(fcForm.break_hourly_rate) * parseFloat(fcForm.break_hours_per_week) * _WEEKS_PER_MONTH;
+    if (fcForm.hourly_rate && fcForm.hours_per_week)
+      return parseFloat(fcForm.hourly_rate) * parseFloat(fcForm.hours_per_week) * _WEEKS_PER_MONTH;
+    return null;
+  };
+
+  const _buildFcPayload = (f: FcData) => ({
+    hours_per_week: f.hours_per_week ? parseFloat(f.hours_per_week) : null,
+    hourly_rate: f.hourly_rate ? parseFloat(f.hourly_rate) : null,
+    break_hourly_rate: f.break_hourly_rate ? parseFloat(f.break_hourly_rate) : null,
+    break_hours_per_week: f.break_hours_per_week ? parseFloat(f.break_hours_per_week) : null,
+    is_working: f.is_working,
+    is_summer_break: f.is_summer_break,
+    is_winter_break: f.is_winter_break,
+    travel_home: f.travel_home,
+    travel_cost: f.travel_cost ? parseFloat(f.travel_cost) : null,
+    tuition_due: f.tuition_due ? parseFloat(f.tuition_due) : null,
+    scholarship_received: f.scholarship_received ? parseFloat(f.scholarship_received) : null,
+    rent: f.rent ? parseFloat(f.rent) : null,
+    income_amount: _computedIncome(),
+    food_estimate: f.food_estimate ? parseFloat(f.food_estimate) : null,
+    utilities_estimate: f.utilities_estimate ? parseFloat(f.utilities_estimate) : null,
+  });
+
   const handleFcSave = async () => {
     setFcSaving(true);
-    const payload = {
-      hours_per_week: fcForm.hours_per_week ? parseFloat(fcForm.hours_per_week) : null,
-      is_working: fcForm.is_working,
-      is_summer_break: fcForm.is_summer_break,
-      is_winter_break: fcForm.is_winter_break,
-      travel_home: fcForm.travel_home,
-      travel_cost: fcForm.travel_cost ? parseFloat(fcForm.travel_cost) : null,
-      tuition_due: fcForm.tuition_due ? parseFloat(fcForm.tuition_due) : null,
-      scholarship_received: fcForm.scholarship_received ? parseFloat(fcForm.scholarship_received) : null,
-      rent: fcForm.rent ? parseFloat(fcForm.rent) : null,
-    };
+    const payload = _buildFcPayload(fcForm);
     try {
       const res = await fetch(`${API}/forecast-context/${fcYear}/${fcMonth}`, {
         method: 'PUT', headers: authHdr, body: JSON.stringify(payload),
@@ -233,17 +297,8 @@ export default function Transactions() {
     if (!targets.length) { showToast('Select at least one month', false); return; }
     setFcSaving(true);
     // Auto-save source month first so the DB row exists for bulk-copy to read
-    const savePayload = {
-      hours_per_week: fcForm.hours_per_week ? parseFloat(fcForm.hours_per_week) : null,
-      is_working: fcForm.is_working, is_summer_break: fcForm.is_summer_break,
-      is_winter_break: fcForm.is_winter_break, travel_home: fcForm.travel_home,
-      travel_cost: fcForm.travel_cost ? parseFloat(fcForm.travel_cost) : null,
-      tuition_due: fcForm.tuition_due ? parseFloat(fcForm.tuition_due) : null,
-      scholarship_received: fcForm.scholarship_received ? parseFloat(fcForm.scholarship_received) : null,
-      rent: fcForm.rent ? parseFloat(fcForm.rent) : null,
-    };
     await fetch(`${API}/forecast-context/${fcYear}/${fcMonth}`, {
-      method: 'PUT', headers: authHdr, body: JSON.stringify(savePayload),
+      method: 'PUT', headers: authHdr, body: JSON.stringify(_buildFcPayload(fcForm)),
     }).catch(() => {});
     try {
       const res = await fetch(`${API}/forecast-context/bulk-copy`, {
@@ -392,7 +447,8 @@ export default function Transactions() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ year: String(filterYear), month: String(filterMonth), limit: '200' });
-      if (filterType !== 'ALL') params.set('type', filterType);
+      // RECURRING is a client-side filter — fetch all types from the API
+      if (filterType !== 'ALL' && filterType !== 'RECURRING') params.set('type', filterType);
       const res = await fetch(`${API}/transactions?${params}`, { headers: authHdr });
       if (!res.ok) throw new Error();
       setTransactions(await res.json() as Transaction[]);
@@ -425,25 +481,49 @@ export default function Transactions() {
   };
 
   // ── Save transaction ───────────────────────────────────────────────────────
+  const doSave = async (payload: object, isEdit: boolean) => {
+    setSaving(true);
+    try {
+      const url = isEdit ? `${API}/transactions/${editingId}` : `${API}/transactions`;
+      const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: authHdr, body: JSON.stringify(payload) });
+      if (!res.ok) { const e = await res.json() as { detail?: string }; throw new Error(e.detail ?? 'Failed'); }
+      showToast(isEdit ? 'Updated' : 'Transaction added', true);
+      closeModal(); fetchTransactions();
+    } catch (e: unknown) {
+      setFormError(e instanceof Error ? e.message : 'Save failed');
+    } finally { setSaving(false); }
+  };
+
   const handleSave = async () => {
     if (!form.amount || Number(form.amount) <= 0) { setFormError('Amount must be > 0'); return; }
     if (!form.transaction_date) { setFormError('Date is required'); return; }
-    setFormError(''); setSaving(true);
+    setFormError('');
+
     const payload = {
       amount: parseFloat(form.amount), currency: form.currency, type: form.type,
       category: form.category, description: form.description || null,
       transaction_date: form.transaction_date, is_recurring: form.is_recurring,
       recurring_frequency: form.is_recurring ? form.recurring_frequency : null,
     };
-    try {
-      const url = editingId ? `${API}/transactions/${editingId}` : `${API}/transactions`;
-      const res = await fetch(url, { method: editingId ? 'PUT' : 'POST', headers: authHdr, body: JSON.stringify(payload) });
-      if (!res.ok) { const e = await res.json() as { detail?: string }; throw new Error(e.detail ?? 'Failed'); }
-      showToast(editingId ? 'Updated' : 'Transaction added', true);
-      closeModal(); fetchTransactions();
-    } catch (e: unknown) {
-      setFormError(e instanceof Error ? e.message : 'Save failed');
-    } finally { setSaving(false); }
+
+    // Duplicate detection (new transactions only)
+    if (!editingId && form.description) {
+      const txDate = new Date(form.transaction_date + 'T00:00:00');
+      const dup = transactions.find(t =>
+        t.description &&
+        t.description.toLowerCase() === form.description.toLowerCase() &&
+        Math.abs(parseFloat(t.amount) - parseFloat(form.amount)) < 0.01 &&
+        new Date(t.transaction_date + 'T00:00:00').getFullYear() === txDate.getFullYear() &&
+        new Date(t.transaction_date + 'T00:00:00').getMonth() === txDate.getMonth()
+      );
+      if (dup) {
+        pendingSavePayloadRef.current = payload;
+        setDupWarning({ existing: dup });
+        return;
+      }
+    }
+
+    await doSave(payload, Boolean(editingId));
   };
 
   // ── Delete ─────────────────────────────────────────────────────────────────
@@ -456,6 +536,39 @@ export default function Transactions() {
       setTransactions(prev => prev.filter(t => t.id !== id));
     } catch { showToast('Failed to delete', false); }
     finally { setDeletingId(null); }
+  };
+
+  const handleDeleteAll = async () => {
+    setDeleteAllLoading(true);
+    try {
+      const res = await fetch(`${API}/transactions`, { method: 'DELETE', headers: authHdr });
+      if (!res.ok) throw new Error();
+      const data = await res.json() as { deleted: number };
+      showToast(`Deleted ${data.deleted} transaction${data.deleted !== 1 ? 's' : ''}`, true);
+      setTransactions([]);
+    } catch { showToast('Failed to delete transactions', false); }
+    finally {
+      setDeleteAllLoading(false);
+      setDeleteAllOpen(false);
+      setDeleteAllConfirmText('');
+    }
+  };
+
+  const handleResetFc = async () => {
+    setResetFcLoading(true);
+    try {
+      const res = await fetch(`${API}/forecast-context`, { method: 'DELETE', headers: authHdr });
+      if (!res.ok) throw new Error();
+      const data = await res.json() as { deleted: number };
+      showToast(`Cleared ${data.deleted} forecast month${data.deleted !== 1 ? 's' : ''}`, true);
+      setFcContexts({});
+      setFcForm({ ...EMPTY_FC });
+    } catch { showToast('Failed to reset forecast setup', false); }
+    finally {
+      setResetFcLoading(false);
+      setResetFcOpen(false);
+      setResetFcConfirmText('');
+    }
   };
 
   // ── Scenario helpers ───────────────────────────────────────────────────────
@@ -491,6 +604,33 @@ export default function Transactions() {
 
   const currentCats = form.type === 'INCOME' ? INCOME_CATS : EXPENSE_CATS;
   const yearOptions = Array.from({ length: 5 }, (_, i) => today.getFullYear() - i);
+  const displayedTransactions = filterType === 'RECURRING'
+    ? transactions.filter(t => t.is_recurring)
+    : transactions;
+
+  /** Group transactions by ISO week, returning ordered week groups. */
+  const weekGroups = (() => {
+    const map = new Map<string, { label: string; weekTotal: number; txs: typeof transactions }>();
+    for (const tx of displayedTransactions) {
+      const d = new Date(tx.transaction_date + 'T00:00:00');
+      const iso = d.toISOString().slice(0, 10); // for ordering only
+      // Compute ISO week: Monday = day 1
+      const day = d.getDay() === 0 ? 7 : d.getDay();
+      const monday = new Date(d); monday.setDate(d.getDate() - (day - 1));
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+      // ISO week number
+      const jan4 = new Date(d.getFullYear(), 0, 4);
+      const startOfW1 = new Date(jan4); startOfW1.setDate(jan4.getDate() - ((jan4.getDay() || 7) - 1));
+      const weekNum = Math.floor((monday.getTime() - startOfW1.getTime()) / (7 * 86400000)) + 1;
+      const key = `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}-${iso}`;
+      const fmt2 = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      if (!map.has(key)) map.set(key, { label: `Week of ${fmt2(monday)} – ${fmt2(sunday)}`, weekTotal: 0, txs: [] });
+      const g = map.get(key)!;
+      g.txs.push(tx);
+      if (tx.type === 'EXPENSE') g.weekTotal += parseFloat(tx.amount);
+    }
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([, g]) => g);
+  })();
 
   if (!token) {
     return <div style={s.centered}><p style={{ color: 'var(--brand-rose)' }}>Please sign in to view transactions.</p></div>;
@@ -517,6 +657,10 @@ export default function Transactions() {
             onClick={() => setImportOpen(true)}>
             <Upload size={16} /> Import
           </button>
+          <button style={{ ...s.addBtn, background: 'transparent', border: '1px solid #f87171', color: '#f87171' }}
+            onClick={() => { setDeleteAllOpen(true); setDeleteAllConfirmText(''); }}>
+            <Trash2 size={16} /> Delete All
+          </button>
           <button style={s.addBtn} onClick={openAdd}><Plus size={18} /> Add Transaction</button>
         </div>
       </div>
@@ -542,9 +686,9 @@ export default function Transactions() {
       {/* Filters */}
       <div style={s.filters}>
         <div style={s.tabs}>
-          {(['ALL', 'INCOME', 'EXPENSE'] as const).map(t => (
+          {(['ALL', 'INCOME', 'EXPENSE', 'RECURRING'] as const).map(t => (
             <button key={t} style={{ ...s.tab, ...(filterType === t ? s.tabActive : {}) }} onClick={() => setFilterType(t)}>
-              {t === 'ALL' ? 'All' : t === 'INCOME' ? 'Income' : 'Expenses'}
+              {t === 'ALL' ? 'All' : t === 'INCOME' ? 'Income' : t === 'EXPENSE' ? 'Expenses' : '↻ Fixed'}
             </button>
           ))}
         </div>
@@ -568,59 +712,72 @@ export default function Transactions() {
       <div style={s.list}>
         {loading ? (
           <div style={s.centered}><span style={{ color: 'var(--brand-rose)', opacity: 0.5 }}>Loading…</span></div>
-        ) : transactions.length === 0 ? (
+        ) : displayedTransactions.length === 0 ? (
           <div style={s.empty}>
-            <div style={s.emptyIcon}>📊</div>
-            <p style={s.emptyText}>No transactions for this period.</p>
-            <button style={s.addBtnSm} onClick={openAdd}><Plus size={14} /> Add one</button>
+            <div style={s.emptyIcon}>{filterType === 'RECURRING' ? '↻' : '📊'}</div>
+            <p style={s.emptyText}>
+              {filterType === 'RECURRING'
+                ? 'No fixed/recurring expenses this period. Mark a transaction as recurring to see it here.'
+                : 'No transactions for this period.'}
+            </p>
+            {filterType !== 'RECURRING' && <button style={s.addBtnSm} onClick={openAdd}><Plus size={14} /> Add one</button>}
           </div>
         ) : (
-          transactions.map(tx => {
-            const origAmt = parseFloat(tx.amount);
-            const workingAmt = convert(origAmt, tx.currency, workingCurrency);
-            const homeAmt = convert(origAmt, tx.currency, homeCurrency);
-            const showOrig = tx.currency !== workingCurrency;
-            const showHome = homeCurrency !== workingCurrency && tx.currency !== homeCurrency;
-            return (
-              <div key={tx.id} style={s.txRow}>
-                <div style={s.txEmoji}>{CAT_EMOJI[tx.category]}</div>
-                <div style={s.txMeta}>
-                  <span style={s.txCategory}>{CAT_LABEL[tx.category]}</span>
-                  {tx.description && <span style={s.txDesc}>{tx.description}</span>}
-                  <div style={s.txBadges}>
-                    <span style={s.txDate}>
-                      {new Date(tx.transaction_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                    </span>
-                    {tx.is_recurring && (
-                      <span style={s.recurBadge}>
-                        ↻ {tx.recurring_frequency ? FREQ_LABEL[tx.recurring_frequency] : 'recurring'}
-                      </span>
-                    )}
-                    {tx.is_generated && (
-                      <span style={s.genBadge}>auto</span>
-                    )}
-                    {showOrig && (
-                      <span style={s.origBadge}>{tx.currency} {origAmt.toFixed(2)}</span>
-                    )}
-                    {showHome && (
-                      <span style={s.homeBadge}>≈ {homeCurrency} {homeAmt.toFixed(2)}</span>
-                    )}
-                  </div>
-                </div>
-                <div style={s.txRight}>
-                  <span style={{ ...s.txAmount, color: tx.type === 'INCOME' ? '#4ade80' : '#f87171' }}>
-                    {tx.type === 'INCOME' ? '+' : '−'}{fmt(workingAmt, workingCurrency)}
+          weekGroups.map((group, gi) => (
+            <div key={gi}>
+              {/* Week header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                padding: '6px 14px', background: 'rgba(255,215,0,0.05)',
+                borderBottom: '1px solid rgba(122,0,0,0.35)', borderTop: gi > 0 ? '1px solid rgba(122,0,0,0.2)' : 'none' }}>
+                <span style={{ color: 'var(--brand-gold)', fontSize: '0.78em', fontWeight: 600 }}>{group.label}</span>
+                {group.weekTotal > 0 && (
+                  <span style={{ color: '#f87171', fontSize: '0.76em' }}>
+                    −{fmt(group.weekTotal, workingCurrency)} spent
                   </span>
-                  <div style={s.txActions}>
-                    <button style={s.iconBtn} onClick={() => openEdit(tx)} title="Edit"><Pencil size={13} /></button>
-                    <button style={{ ...s.iconBtn, color: '#f87171' }} onClick={() => handleDelete(tx.id)} disabled={deletingId === tx.id} title="Delete">
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
+                )}
               </div>
-            );
-          })
+              {group.txs.map(tx => {
+                const origAmt = parseFloat(tx.amount);
+                const workingAmt = convert(origAmt, tx.currency, workingCurrency);
+                const homeAmt = convert(origAmt, tx.currency, homeCurrency);
+                const showOrig = tx.currency !== workingCurrency;
+                const showHome = homeCurrency !== workingCurrency && tx.currency !== homeCurrency;
+                return (
+                  <div key={tx.id} style={s.txRow}>
+                    <div style={s.txEmoji}>{CAT_EMOJI[tx.category]}</div>
+                    <div style={s.txMeta}>
+                      <span style={s.txCategory}>{CAT_LABEL[tx.category]}</span>
+                      {tx.description && <span style={s.txDesc}>{tx.description}</span>}
+                      <div style={s.txBadges}>
+                        <span style={s.txDate}>
+                          {new Date(tx.transaction_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </span>
+                        {tx.is_recurring && (
+                          <span style={s.recurBadge}>
+                            ↻ {tx.recurring_frequency ? FREQ_LABEL[tx.recurring_frequency] : 'recurring'}
+                          </span>
+                        )}
+                        {tx.is_generated && <span style={s.genBadge}>auto</span>}
+                        {showOrig && <span style={s.origBadge}>{tx.currency} {origAmt.toFixed(2)}</span>}
+                        {showHome && <span style={s.homeBadge}>≈ {homeCurrency} {homeAmt.toFixed(2)}</span>}
+                      </div>
+                    </div>
+                    <div style={s.txRight}>
+                      <span style={{ ...s.txAmount, color: tx.type === 'INCOME' ? '#4ade80' : '#f87171' }}>
+                        {tx.type === 'INCOME' ? '+' : '−'}{fmt(workingAmt, workingCurrency)}
+                      </span>
+                      <div style={s.txActions}>
+                        <button style={s.iconBtn} onClick={() => openEdit(tx)} title="Edit"><Pencil size={13} /></button>
+                        <button style={{ ...s.iconBtn, color: '#f87171' }} onClick={() => handleDelete(tx.id)} disabled={deletingId === tx.id} title="Delete">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))
         )}
       </div>
 
@@ -796,17 +953,50 @@ export default function Transactions() {
               </div>
 
               <div style={s.fcGrid}>
-                <div style={s.formGroup}>
-                  <label style={s.label}>Hours/week working</label>
-                  <input style={s.input} type="number" min="0" max="168" placeholder="e.g. 20"
-                    value={fcForm.hours_per_week}
-                    onChange={e => setFcForm(f => ({ ...f, hours_per_week: e.target.value }))} />
-                </div>
+                {fcForm.is_working && (
+                  <>
+                    <div style={s.formGroup}>
+                      <label style={s.label}>Hourly rate ($/hr)</label>
+                      <input style={s.input} type="number" min="0" step="0.01" placeholder="e.g. 18.00"
+                        value={fcForm.hourly_rate}
+                        onChange={e => setFcForm(f => ({ ...f, hourly_rate: e.target.value }))} />
+                    </div>
+                    <div style={s.formGroup}>
+                      <label style={s.label}>Hours/week (job)</label>
+                      <input style={s.input} type="number" min="0" max="168" placeholder="e.g. 20"
+                        value={fcForm.hours_per_week}
+                        onChange={e => setFcForm(f => ({ ...f, hours_per_week: e.target.value }))} />
+                    </div>
+                    {fcForm.hourly_rate && fcForm.hours_per_week && (
+                      <div style={{ gridColumn: '1 / -1', padding: '8px 12px', borderRadius: 6,
+                        background: 'rgba(255,215,0,0.06)', border: '1px solid rgba(255,215,0,0.2)',
+                        fontSize: '0.82em', color: 'rgba(255,228,181,0.7)' }}>
+                        Estimated monthly income:{' '}
+                        <strong style={{ color: 'var(--brand-gold)' }}>
+                          ${(parseFloat(fcForm.hourly_rate) * parseFloat(fcForm.hours_per_week) * (52 / 12)).toFixed(2)}
+                        </strong>
+                        <span style={{ marginLeft: 6, opacity: 0.55 }}>(saved as income_amount)</span>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div style={s.formGroup}>
                   <label style={s.label}>Rent this month ($)</label>
                   <input style={s.input} type="number" min="0" placeholder="e.g. 750"
                     value={fcForm.rent}
                     onChange={e => setFcForm(f => ({ ...f, rent: e.target.value }))} />
+                </div>
+                <div style={s.formGroup}>
+                  <label style={s.label}>Food estimate ($)</label>
+                  <input style={s.input} type="number" min="0" placeholder="e.g. 300"
+                    value={fcForm.food_estimate}
+                    onChange={e => setFcForm(f => ({ ...f, food_estimate: e.target.value }))} />
+                </div>
+                <div style={s.formGroup}>
+                  <label style={s.label}>Utilities estimate ($)</label>
+                  <input style={s.input} type="number" min="0" placeholder="e.g. 80"
+                    value={fcForm.utilities_estimate}
+                    onChange={e => setFcForm(f => ({ ...f, utilities_estimate: e.target.value }))} />
                 </div>
                 <div style={s.formGroup}>
                   <label style={s.label}>Tuition due ($)</label>
@@ -831,8 +1021,14 @@ export default function Transactions() {
               </div>
 
               <div style={s.fcCheckRow}>
+                <label style={s.checkRow}>
+                  <input type="checkbox"
+                    checked={fcForm.is_working}
+                    onChange={e => handleIsWorkingToggle(e.target.checked)}
+                    style={{ accentColor: 'var(--brand-gold)' }} />
+                  <span style={{ color: 'var(--brand-rose)', fontSize: '0.85em' }}>Working a job this month</span>
+                </label>
                 {([
-                  ['is_working', 'Have income this month'],
                   ['is_summer_break', 'Summer break (May–Aug)'],
                   ['is_winter_break', 'Winter break (Dec–Jan)'],
                   ['travel_home', '✈️ Flying home this month'],
@@ -847,10 +1043,70 @@ export default function Transactions() {
                 ))}
               </div>
 
-              <button style={{ ...s.saveBtn, marginTop: '14px', flex: 'none', padding: '10px 28px', alignSelf: 'flex-start' }}
-                onClick={handleFcSave} disabled={fcSaving}>
-                {fcSaving ? 'Saving…' : 'Save'}
-              </button>
+              {/* Break sub-section: reduced-hour income during break */}
+              {(fcForm.is_summer_break || fcForm.is_winter_break) && fcForm.is_working && (
+                <div style={{ margin: '10px 0 4px', padding: '12px 14px', borderRadius: '8px',
+                  background: 'rgba(255,215,0,0.04)', border: '1px dashed rgba(255,215,0,0.25)' }}>
+                  <p style={{ color: 'var(--brand-gold)', fontSize: '0.83em', margin: '0 0 10px', fontWeight: 600 }}>
+                    Still working during break? Enter your reduced hours:
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div style={s.formGroup}>
+                      <label style={s.label}>Break hourly rate ($/hr)</label>
+                      <input style={s.input} type="number" min="0" step="0.01" placeholder="e.g. 15.00"
+                        value={fcForm.break_hourly_rate}
+                        onChange={e => setFcForm(f => ({ ...f, break_hourly_rate: e.target.value }))} />
+                    </div>
+                    <div style={s.formGroup}>
+                      <label style={s.label}>Break hours/week</label>
+                      <input style={s.input} type="number" min="0" max="168" placeholder="e.g. 10"
+                        value={fcForm.break_hours_per_week}
+                        onChange={e => setFcForm(f => ({ ...f, break_hours_per_week: e.target.value }))} />
+                    </div>
+                  </div>
+                  {fcForm.break_hourly_rate && fcForm.break_hours_per_week && (
+                    <p style={{ color: 'rgba(255,228,181,0.6)', fontSize: '0.78em', margin: '8px 0 0' }}>
+                      Break income estimate:{' '}
+                      <strong style={{ color: 'var(--brand-gold)' }}>
+                        ${(parseFloat(fcForm.break_hourly_rate) * parseFloat(fcForm.break_hours_per_week) * (52 / 12)).toFixed(2)}/mo
+                      </strong>
+                      {' '}(overrides regular job income for this month)
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Inline warning when unticking is_working while job income exists */}
+              {workingWarnOpen && (
+                <div style={{ margin: '10px 0 4px', padding: '12px 14px', borderRadius: '8px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)' }}>
+                  <p style={{ color: '#fbbf24', fontSize: '0.85em', margin: '0 0 10px', lineHeight: 1.5 }}>
+                    ⚠ You have job-related income logged for {MONTHS[fcMonth - 1]} {fcYear}. Are you sure you're not working that month?
+                  </p>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button style={{ ...s.cancelBtn, flex: 'none', padding: '7px 16px', fontSize: '0.82em' }}
+                      onClick={() => setWorkingWarnOpen(false)}>
+                      Cancel — keep working
+                    </button>
+                    <button style={{ ...s.saveBtn, flex: 'none', padding: '7px 16px', fontSize: '0.82em', background: 'linear-gradient(135deg,#f59e0b,#d97706)' }}
+                      onClick={() => { setWorkingWarnOpen(false); setFcForm(f => ({ ...f, is_working: false, hours_per_week: '', hourly_rate: '' })); }}>
+                      Confirm — not working
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '14px', alignItems: 'center' }}>
+                <button style={{ ...s.saveBtn, flex: 'none', padding: '10px 28px' }}
+                  onClick={handleFcSave} disabled={fcSaving}>
+                  {fcSaving ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  style={{ ...s.cancelBtn, flex: 'none', padding: '10px 18px', fontSize: '0.82em', color: '#f87171', borderColor: 'rgba(248,113,113,0.3)' }}
+                  onClick={() => setResetFcOpen(true)}
+                >
+                  Reset All Setup
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -1053,6 +1309,112 @@ export default function Transactions() {
                 <button style={{ ...s.saveBtn, marginTop: '20px' }} onClick={closeImport}>Done</button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Delete All Confirmation Modal ─── */}
+      {deleteAllOpen && (
+        <div style={s.overlay} onClick={() => { setDeleteAllOpen(false); setDeleteAllConfirmText(''); }}>
+          <div style={{ ...s.modal, maxWidth: '420px' }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={{ ...s.modalTitle, color: '#f87171' }}>Delete All Transactions</h2>
+              <button style={s.closeBtn} onClick={() => { setDeleteAllOpen(false); setDeleteAllConfirmText(''); }}><X size={18} /></button>
+            </div>
+            <p style={{ color: 'var(--brand-rose)', fontSize: '0.9em', marginBottom: '14px', lineHeight: 1.6 }}>
+              This will permanently delete <strong>every transaction</strong> in your account — all months, all years. This cannot be undone.
+            </p>
+            <p style={{ color: 'var(--brand-rose)', fontSize: '0.88em', marginBottom: '8px', opacity: 0.75 }}>
+              Type <strong style={{ color: '#f87171' }}>DELETE</strong> to confirm:
+            </p>
+            <input
+              style={{ ...s.input, borderColor: deleteAllConfirmText === 'DELETE' ? '#f87171' : undefined }}
+              type="text"
+              placeholder="DELETE"
+              value={deleteAllConfirmText}
+              onChange={e => setDeleteAllConfirmText(e.target.value)}
+              autoFocus
+            />
+            <div style={s.modalFooter}>
+              <button style={s.cancelBtn} onClick={() => { setDeleteAllOpen(false); setDeleteAllConfirmText(''); }}>Cancel</button>
+              <button
+                style={{ ...s.saveBtn, background: deleteAllConfirmText === 'DELETE' ? 'linear-gradient(135deg,#dc2626,#991b1b)' : 'rgba(220,38,38,0.3)', cursor: deleteAllConfirmText === 'DELETE' ? 'pointer' : 'not-allowed' }}
+                disabled={deleteAllConfirmText !== 'DELETE' || deleteAllLoading}
+                onClick={handleDeleteAll}
+              >
+                {deleteAllLoading ? 'Deleting…' : 'Delete All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Reset All Forecast Setup Modal ─── */}
+      {resetFcOpen && (
+        <div style={s.overlay} onClick={() => { setResetFcOpen(false); setResetFcConfirmText(''); }}>
+          <div style={{ ...s.modal, maxWidth: '420px' }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={{ ...s.modalTitle, color: '#f87171' }}>Reset All Forecast Setup</h2>
+              <button style={s.closeBtn} onClick={() => { setResetFcOpen(false); setResetFcConfirmText(''); }}><X size={18} /></button>
+            </div>
+            <p style={{ color: 'var(--brand-rose)', fontSize: '0.9em', marginBottom: '14px', lineHeight: 1.6 }}>
+              This will permanently delete <strong>all saved forecast context</strong> — every month's covariate data across all years. This cannot be undone.
+            </p>
+            <p style={{ color: 'var(--brand-rose)', fontSize: '0.88em', marginBottom: '8px', opacity: 0.75 }}>
+              Type <strong style={{ color: '#f87171' }}>RESET</strong> to confirm:
+            </p>
+            <input
+              style={{ ...s.input, borderColor: resetFcConfirmText === 'RESET' ? '#f87171' : undefined }}
+              type="text"
+              placeholder="RESET"
+              value={resetFcConfirmText}
+              onChange={e => setResetFcConfirmText(e.target.value)}
+              autoFocus
+            />
+            <div style={s.modalFooter}>
+              <button style={s.cancelBtn} onClick={() => { setResetFcOpen(false); setResetFcConfirmText(''); }}>Cancel</button>
+              <button
+                style={{ ...s.saveBtn, background: resetFcConfirmText === 'RESET' ? 'linear-gradient(135deg,#dc2626,#991b1b)' : 'rgba(220,38,38,0.3)', cursor: resetFcConfirmText === 'RESET' ? 'pointer' : 'not-allowed' }}
+                disabled={resetFcConfirmText !== 'RESET' || resetFcLoading}
+                onClick={handleResetFc}
+              >
+                {resetFcLoading ? 'Resetting…' : 'Reset All'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Duplicate Warning Modal ─── */}
+      {dupWarning && (
+        <div style={s.overlay} onClick={() => setDupWarning(null)}>
+          <div style={{ ...s.modal, maxWidth: '420px' }} onClick={e => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <h2 style={{ ...s.modalTitle, color: '#fbbf24' }}>⚠ Possible Duplicate</h2>
+              <button style={s.closeBtn} onClick={() => setDupWarning(null)}><X size={18} /></button>
+            </div>
+            <p style={{ color: 'var(--brand-rose)', fontSize: '0.9em', marginBottom: '14px', lineHeight: 1.5 }}>
+              A transaction with the same description and amount already exists for this month:
+            </p>
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)', marginBottom: '20px' }}>
+              <span style={{ fontWeight: 600, color: '#fbbf24', fontSize: '0.88em' }}>
+                {dupWarning.existing.description} — {dupWarning.existing.currency} {parseFloat(dupWarning.existing.amount).toFixed(2)}
+              </span>
+              <span style={{ display: 'block', color: 'var(--brand-rose)', opacity: 0.55, fontSize: '0.78em', marginTop: '3px' }}>
+                {new Date(dupWarning.existing.transaction_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+              </span>
+            </div>
+            <div style={s.modalFooter}>
+              <button style={s.cancelBtn} onClick={() => setDupWarning(null)}>Cancel — don't add</button>
+              <button style={{ ...s.saveBtn, background: 'linear-gradient(135deg,#f59e0b,#d97706)' }}
+                onClick={async () => {
+                  const p = pendingSavePayloadRef.current;
+                  setDupWarning(null);
+                  if (p) await doSave(p, false);
+                }}>
+                Add anyway
+              </button>
+            </div>
           </div>
         </div>
       )}

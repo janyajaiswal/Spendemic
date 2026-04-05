@@ -126,6 +126,10 @@ class UserUpdate(BaseModel):
     visa_type: Optional[VisaTypeEnum] = None
     max_work_hours_per_week: Optional[int] = None
     graduation_date: Optional[date] = None
+    summer_break_start: Optional[date] = None
+    summer_break_end: Optional[date] = None
+    winter_break_start: Optional[date] = None
+    winter_break_end: Optional[date] = None
     total_loan_amount: Optional[Decimal] = None
     monthly_loan_payment: Optional[Decimal] = None
     loan_start_date: Optional[date] = None
@@ -199,6 +203,10 @@ class UserResponse(BaseModel):
     visa_type: Optional[VisaTypeEnum] = None
     max_work_hours_per_week: Optional[int] = None
     graduation_date: Optional[date] = None
+    summer_break_start: Optional[date] = None
+    summer_break_end: Optional[date] = None
+    winter_break_start: Optional[date] = None
+    winter_break_end: Optional[date] = None
     total_loan_amount: Optional[Decimal] = None
     monthly_loan_payment: Optional[Decimal] = None
     loan_start_date: Optional[date] = None
@@ -387,6 +395,9 @@ class BudgetResponse(BaseModel):
 class ForecastContextUpsert(BaseModel):
     """Create or update covariate values for a single month."""
     hours_per_week: Optional[float] = Field(None, ge=0, le=168)
+    hourly_rate: Optional[float] = Field(None, ge=0, description="Hourly pay rate ($/hr) — income_amount derived as hourly_rate × hours_per_week × (52/12)")
+    break_hourly_rate: Optional[float] = Field(None, ge=0, description="Reduced hourly rate during break period ($/hr)")
+    break_hours_per_week: Optional[float] = Field(None, ge=0, le=168, description="Reduced hours/week during break period")
     is_working: bool = True
     is_summer_break: bool = False
     is_winter_break: bool = False
@@ -397,6 +408,9 @@ class ForecastContextUpsert(BaseModel):
     exchange_rate: Optional[float] = Field(None, gt=0)
     health_insurance: bool = False
     rent: Optional[float] = Field(None, ge=0)
+    income_amount: Optional[float] = Field(None, ge=0, description="Actual monthly income in USD (auto-derived from hourly_rate × hours_per_week if not set)")
+    food_estimate: Optional[float] = Field(None, ge=0, description="Estimated monthly food/groceries")
+    utilities_estimate: Optional[float] = Field(None, ge=0, description="Estimated monthly utilities (phone, internet, etc.)")
 
 
 class ForecastContextResponse(ForecastContextUpsert):
@@ -419,25 +433,14 @@ class ForecastContextBulkCopy(BaseModel):
 
 # ==================== FORECAST REQUEST / RESPONSE ====================
 
-class ForecastMonthInput(BaseModel):
+class ForecastMonthInput(ForecastContextUpsert):
     """
-    Covariate data for one future month.
+    Covariate data for one future month (inline POST /forecast body).
+    Inherits all covariate fields from ForecastContextUpsert.
     year + month identify which calendar month this applies to.
-    All spending-related fields are required (no assumed defaults) —
-    only provide what you know; omit the rest and the model will use
-    your historical spending pattern as the baseline.
     """
     year: int = Field(..., ge=2000, le=2100)
     month: int = Field(..., ge=1, le=12)
-    rent: Optional[float] = Field(None, ge=0, description="Monthly rent in USD")
-    tuition_due: Optional[float] = Field(None, ge=0, description="Tuition payment due this month")
-    scholarship_received: Optional[float] = Field(None, ge=0, description="Scholarship credit this month")
-    travel_home: bool = Field(False, description="Flying home this month?")
-    travel_cost: Optional[float] = Field(None, ge=0, description="Actual round-trip cost if travel_home=true")
-    is_summer_break: bool = False
-    is_winter_break: bool = False
-    is_working: bool = True
-    hours_per_week: Optional[float] = Field(None, ge=0, le=168)
 
 
 class ForecastRequest(BaseModel):
@@ -460,15 +463,18 @@ class ForecastRequest(BaseModel):
 
 class ForecastHistoryPoint(BaseModel):
     year: int
-    month: int
+    month: Optional[int] = None
+    week: Optional[int] = None   # ISO week number, set when granularity=weekly
     total: float
     synthetic: bool = False
 
 
 class ForecastPrediction(BaseModel):
-    month_offset: int
+    month_offset: Optional[int] = None
+    week_offset: Optional[int] = None
     year: int
-    month: int
+    month: Optional[int] = None
+    week: Optional[int] = None
     lower: float
     median: float
     upper: float
@@ -477,6 +483,17 @@ class ForecastPrediction(BaseModel):
 class ForecastResponse(BaseModel):
     history: List[ForecastHistoryPoint]
     predictions: List[ForecastPrediction]
-    prediction_months: int
+    prediction_months: Optional[int] = None
+    prediction_weeks: Optional[int] = None
+    granularity: str = "monthly"
     graduation_date: Optional[str] = None
     warnings: List[str] = []
+    missing_fields: List[str] = []  # fields absent that would improve forecast accuracy
+
+
+class WeeklyTransactionSummary(BaseModel):
+    year: int
+    week: int        # ISO week number
+    week_start: date
+    week_end: date
+    total: float

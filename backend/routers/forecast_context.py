@@ -32,6 +32,21 @@ def list_contexts(
     return q.order_by(ForecastContext.year, ForecastContext.month).all()
 
 
+@router.delete("", status_code=200)
+def delete_all_contexts(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Delete every forecast context row for the current user."""
+    deleted = (
+        db.query(ForecastContext)
+        .filter(ForecastContext.user_id == current_user.id)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return {"deleted": deleted}
+
+
 @router.get("/{year}/{month}", response_model=ForecastContextResponse)
 def get_context(
     year: int = Path(..., ge=2000, le=2100),
@@ -83,6 +98,7 @@ def bulk_copy(
 
     source_data = ForecastContextUpsert(
         hours_per_week=source.hours_per_week,
+        hourly_rate=source.hourly_rate,
         is_working=source.is_working,
         is_summer_break=source.is_summer_break,
         is_winter_break=source.is_winter_break,
@@ -93,6 +109,11 @@ def bulk_copy(
         exchange_rate=source.exchange_rate,
         health_insurance=source.health_insurance,
         rent=source.rent,
+        income_amount=source.income_amount,
+        food_estimate=source.food_estimate,
+        utilities_estimate=source.utilities_estimate,
+        break_hourly_rate=source.break_hourly_rate,
+        break_hours_per_week=source.break_hours_per_week,
     )
 
     results = []
@@ -132,6 +153,7 @@ def _get_row(user_id, year: int, month: int, db: Session) -> ForecastContext | N
 
 def _apply_body(row: ForecastContext, body: ForecastContextUpsert) -> None:
     row.hours_per_week = body.hours_per_week
+    row.hourly_rate = body.hourly_rate
     row.is_working = body.is_working
     row.is_summer_break = body.is_summer_break
     row.is_winter_break = body.is_winter_break
@@ -142,3 +164,8 @@ def _apply_body(row: ForecastContext, body: ForecastContextUpsert) -> None:
     row.exchange_rate = body.exchange_rate
     row.health_insurance = body.health_insurance
     row.rent = body.rent
+    row.income_amount = body.income_amount
+    row.food_estimate = body.food_estimate
+    row.utilities_estimate = body.utilities_estimate
+    row.break_hourly_rate = body.break_hourly_rate
+    row.break_hours_per_week = body.break_hours_per_week

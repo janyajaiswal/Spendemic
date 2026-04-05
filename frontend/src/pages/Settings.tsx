@@ -21,6 +21,16 @@ interface ProfileData {
   timezone: string;
   home_currency: string;
   study_country_currency: string;
+  graduation_date: string;
+  monthly_income: string;
+  scholarship_amount: string;
+  scholarship_frequency: string;
+  visa_type: string;
+  max_work_hours_per_week: string;
+  summer_break_start: string;
+  summer_break_end: string;
+  winter_break_start: string;
+  winter_break_end: string;
 }
 
 const EMPTY: ProfileData = {
@@ -28,6 +38,11 @@ const EMPTY: ProfileData = {
   country: '', city: '', state_province: '', postal_code: '',
   university: '', timezone: 'UTC',
   home_currency: 'USD', study_country_currency: 'USD',
+  graduation_date: '', monthly_income: '',
+  scholarship_amount: '', scholarship_frequency: 'NONE',
+  visa_type: 'NONE', max_work_hours_per_week: '',
+  summer_break_start: '', summer_break_end: '',
+  winter_break_start: '', winter_break_end: '',
 };
 
 const CURRENCIES = [
@@ -73,6 +88,16 @@ export default function Settings() {
           timezone: data.timezone ?? 'UTC',
           home_currency: data.home_currency ?? 'USD',
           study_country_currency: data.study_country_currency ?? 'USD',
+          graduation_date: data.graduation_date ?? '',
+          monthly_income: data.monthly_income != null ? String(data.monthly_income) : '',
+          scholarship_amount: data.scholarship_amount != null ? String(data.scholarship_amount) : '',
+          scholarship_frequency: data.scholarship_frequency ?? 'NONE',
+          visa_type: data.visa_type ?? 'NONE',
+          max_work_hours_per_week: data.max_work_hours_per_week != null ? String(data.max_work_hours_per_week) : '',
+          summer_break_start: data.summer_break_start ?? '',
+          summer_break_end: data.summer_break_end ?? '',
+          winter_break_start: data.winter_break_start ?? '',
+          winter_break_end: data.winter_break_end ?? '',
         });
         if (data.profile_picture_url) setAvatarPreview(data.profile_picture_url);
       })
@@ -125,24 +150,39 @@ export default function Settings() {
 
   const handleSave = async () => {
     if (!token) { showToast('error', 'You must be signed in to save changes'); return; }
+    // Graduation date is required on the Academic tab
+    if (tab === 'academic' && !form.graduation_date) {
+      showToast('error', 'Expected graduation date is required for forecasting accuracy.');
+      return;
+    }
     setLoading(true);
     try {
       // Save profile fields (avatar is already uploaded on selection)
-      const payload: Record<string, string> = {
+      const payload: Record<string, unknown> = {
         name: form.name,
-        bio: form.bio,
-        phone_number: form.phone_number,
-        country: form.country,
-        city: form.city,
-        state_province: form.state_province,
-        postal_code: form.postal_code,
-        university: form.university,
+        bio: form.bio || undefined,
+        phone_number: form.phone_number || undefined,
+        country: form.country || undefined,
+        city: form.city || undefined,
+        state_province: form.state_province || undefined,
+        postal_code: form.postal_code || undefined,
+        university: form.university || undefined,
         timezone: form.timezone,
         home_currency: form.home_currency,
         study_country_currency: form.study_country_currency,
+        graduation_date: form.graduation_date || undefined,
+        monthly_income: form.monthly_income ? parseFloat(form.monthly_income) : undefined,
+        summer_break_start: form.summer_break_start || undefined,
+        summer_break_end: form.summer_break_end || undefined,
+        winter_break_start: form.winter_break_start || undefined,
+        winter_break_end: form.winter_break_end || undefined,
+        scholarship_amount: form.scholarship_amount ? parseFloat(form.scholarship_amount) : undefined,
+        scholarship_frequency: form.scholarship_frequency !== 'NONE' ? form.scholarship_frequency : undefined,
+        visa_type: form.visa_type !== 'NONE' ? form.visa_type : undefined,
+        max_work_hours_per_week: form.max_work_hours_per_week ? parseInt(form.max_work_hours_per_week) : undefined,
       };
-      // Remove empty strings so they don't overwrite existing data with nulls
-      Object.keys(payload).forEach(k => { if (!payload[k]) delete payload[k]; });
+      // Remove undefined keys
+      Object.keys(payload).forEach(k => { if (payload[k] === undefined) delete payload[k]; });
 
       const res = await fetch(`${API_BASE}/api/v1/users/me`, {
         method: 'PUT',
@@ -298,25 +338,123 @@ export default function Settings() {
             {/* ── Academic tab ── */}
             {tab === 'academic' && (
               <>
+                {/* Graduation date missing warning */}
+                {!form.graduation_date && (
+                  <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.35)', marginBottom: '4px' }}>
+                    <p style={{ color: '#f87171', fontSize: '0.84em', margin: 0 }}>
+                      ⚠ Expected graduation date is required — it anchors your forecast timeline.
+                    </p>
+                  </div>
+                )}
+                {/* 3-month graduation countdown */}
+                {(() => {
+                  if (!form.graduation_date) return null;
+                  const grad = new Date(form.graduation_date + 'T00:00:00');
+                  const today = new Date();
+                  const daysLeft = Math.ceil((grad.getTime() - today.getTime()) / 86400000);
+                  if (daysLeft > 0 && daysLeft <= 90) {
+                    return (
+                      <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)', marginBottom: '4px' }}>
+                        <p style={{ color: '#fbbf24', fontSize: '0.84em', margin: 0, fontWeight: 600 }}>
+                          🎓 Graduation in {daysLeft} day{daysLeft !== 1 ? 's' : ''} — are you still on track?
+                        </p>
+                        <p style={{ color: '#fbbf24', fontSize: '0.78em', margin: '4px 0 0', opacity: 0.8 }}>
+                          If your date has changed, update it here so your forecast stays accurate.
+                        </p>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
                 <Field label="University">
                   <input style={s.input} value={form.university} onChange={set('university')}
                     placeholder="e.g. Cal State Fullerton" />
                 </Field>
-                <Field label="Home Currency" required>
-                  <select style={{ ...s.input, ...s.select }} value={form.home_currency} onChange={set('home_currency')}>
-                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </Field>
-                <Field label="Working Currency (Country of Study)" required>
-                  <select style={{ ...s.input, ...s.select }} value={form.study_country_currency} onChange={set('study_country_currency')}>
-                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </Field>
+                <div style={s.row}>
+                  <Field label="Home Currency" required>
+                    <select style={{ ...s.input, ...s.select }} value={form.home_currency} onChange={set('home_currency')}>
+                      {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Study Country Currency" required>
+                    <select style={{ ...s.input, ...s.select }} value={form.study_country_currency} onChange={set('study_country_currency')}>
+                      {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </Field>
+                </div>
+                <div style={s.row}>
+                  <Field label="Expected Graduation Date" required>
+                    <input style={{ ...s.input, borderColor: !form.graduation_date ? 'rgba(248,113,113,0.5)' : undefined }}
+                      type="date" value={form.graduation_date} onChange={set('graduation_date')} />
+                  </Field>
+                  <Field label="Monthly Job Income (USD)">
+                    <input style={s.input} type="number" min="0" value={form.monthly_income}
+                      onChange={set('monthly_income')} placeholder="e.g. 800" />
+                  </Field>
+                </div>
+                <div style={s.row}>
+                  <Field label="Scholarship Amount (USD/period)">
+                    <input style={s.input} type="number" min="0" value={form.scholarship_amount}
+                      onChange={set('scholarship_amount')} placeholder="e.g. 2500" />
+                  </Field>
+                  <Field label="Scholarship Frequency">
+                    <select style={{ ...s.input, ...s.select }} value={form.scholarship_frequency} onChange={set('scholarship_frequency')}>
+                      <option value="NONE">None</option>
+                      <option value="MONTHLY">Monthly</option>
+                      <option value="SEMESTER">Per Semester</option>
+                      <option value="QUARTERLY">Quarterly</option>
+                      <option value="ANNUAL">Annual</option>
+                    </select>
+                  </Field>
+                </div>
+                <div style={s.row}>
+                  <Field label="Visa Type">
+                    <select style={{ ...s.input, ...s.select }} value={form.visa_type} onChange={set('visa_type')}>
+                      <option value="NONE">Select visa type</option>
+                      <option value="F1">F-1 (Student)</option>
+                      <option value="J1">J-1 (Exchange)</option>
+                      <option value="M1">M-1 (Vocational)</option>
+                      <option value="OPT">OPT</option>
+                      <option value="CPT">CPT</option>
+                      <option value="H1B">H-1B</option>
+                      <option value="CITIZEN">US Citizen / PR</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </Field>
+                  <Field label="Max Work Hours / Week">
+                    <input style={s.input} type="number" min="0" max="168" value={form.max_work_hours_per_week}
+                      onChange={set('max_work_hours_per_week')} placeholder="F-1 on-campus: 20" />
+                  </Field>
+                </div>
+                {form.visa_type === 'F1' && (
+                  <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(255,215,0,0.06)', border: '1px solid rgba(255,215,0,0.2)', marginTop: '-6px' }}>
+                    <p style={{ color: 'var(--brand-gold)', fontSize: '0.82em', margin: 0 }}>
+                      F-1 students are limited to 20 hrs/week on-campus during the academic term. Your forecast setup will warn you if you exceed this.
+                    </p>
+                  </div>
+                )}
                 <div style={s.infoBox}>
+                  <p style={{ ...s.infoText, fontWeight: 600, marginBottom: 6 }}>Academic Break Schedule</p>
                   <p style={s.infoText}>
-                    Home currency is used to show equivalent amounts from your home country.
-                    Working currency is your primary currency for budgeting in your study country.
+                    Break dates are auto-flagged in your forecast. After graduation: tuition and work income are zeroed out — only living expenses continue.
                   </p>
+                </div>
+                <div style={s.row}>
+                  <Field label="Summer Break Start">
+                    <input style={s.input} type="date" value={form.summer_break_start} onChange={set('summer_break_start')} />
+                  </Field>
+                  <Field label="Summer Break End">
+                    <input style={s.input} type="date" value={form.summer_break_end} onChange={set('summer_break_end')} />
+                  </Field>
+                </div>
+                <div style={s.row}>
+                  <Field label="Winter Break Start">
+                    <input style={s.input} type="date" value={form.winter_break_start} onChange={set('winter_break_start')} />
+                  </Field>
+                  <Field label="Winter Break End">
+                    <input style={s.input} type="date" value={form.winter_break_end} onChange={set('winter_break_end')} />
+                  </Field>
                 </div>
               </>
             )}

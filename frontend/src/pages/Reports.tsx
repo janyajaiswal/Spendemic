@@ -16,6 +16,14 @@ const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'
 function monthLabel(year: number, month: number) {
   return `${MONTH_NAMES[month - 1]} '${String(year).slice(2)}`;
 }
+function weekLabel(year: number, week: number) {
+  // Compute Monday of that ISO week, then derive month abbreviation
+  const jan4 = new Date(year, 0, 4);
+  const startOfW1 = new Date(jan4);
+  startOfW1.setDate(jan4.getDate() - ((jan4.getDay() || 7) - 1));
+  const monday = new Date(startOfW1.getTime() + (week - 1) * 7 * 86400000);
+  return `W${week} ${MONTH_NAMES[monday.getMonth()]}`;
+}
 function usd(n: number) {
   return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
@@ -23,9 +31,10 @@ function usd(n: number) {
 // ─────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────
-interface HistoryPoint  { year: number; month: number; total: number; synthetic: boolean }
-interface Prediction    { year: number; month: number; month_offset: number; lower: number; median: number; upper: number }
-interface ForecastResp  { history: HistoryPoint[]; predictions: Prediction[]; prediction_months: number; graduation_date: string | null; warnings: string[] }
+interface HistoryPoint  { year: number; month?: number; week?: number; total: number; synthetic: boolean }
+interface Prediction    { year: number; month?: number; week?: number; month_offset?: number; week_offset?: number; lower: number; median: number; upper: number }
+interface ForecastResp  { history: HistoryPoint[]; predictions: Prediction[]; prediction_months?: number; prediction_weeks?: number; granularity: string; graduation_date: string | null; warnings: string[] }
+interface WeeklySummaryRow { year: number; week: number; week_start: string; week_end: string; total: number }
 
 interface ChartPoint {
   label: string;
@@ -87,19 +96,25 @@ function Card({ children, style }: { children: React.ReactNode; style?: React.CS
 // ─────────────────────────────────────────────────────
 export default function Reports() {
   const { user } = useAuth();
-  const [forecast, setForecast]         = useState<ForecastResp | null>(null);
-  const [gradForecast, setGradForecast] = useState<ForecastResp | null>(null);
-  const [predMonths, setPredMonths]     = useState(3);
-  const [loading, setLoading]           = useState(false);
-  const [error, setError]               = useState<string | null>(null);
+  const [forecast, setForecast]             = useState<ForecastResp | null>(null);
+  const [gradForecast, setGradForecast]     = useState<ForecastResp | null>(null);
+  const [weeklySummary, setWeeklySummary]   = useState<WeeklySummaryRow[] | null>(null);
+  const [granularity, setGranularity]       = useState<'weekly' | 'monthly'>('weekly');
+  const [predMonths, setPredMonths]         = useState(3);
+  const [predWeeks, setPredWeeks]           = useState(8);
+  const [loading, setLoading]               = useState(false);
+  const [error, setError]                   = useState<string | null>(null);
 
   const headers: HeadersInit = { Authorization: `Bearer ${user?.accessToken ?? ''}` };
 
-  const fetchForecast = useCallback(async (months: number) => {
+  const fetchForecast = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`${API}/forecast?prediction_months=${months}`, { headers });
+      const url = granularity === 'weekly'
+        ? `${API}/forecast?granularity=weekly&prediction_weeks=${predWeeks}`
+        : `${API}/forecast?granularity=monthly&prediction_months=${predMonths}`;
+      const res = await fetch(url, { headers });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error((body as any).detail ?? `Error ${res.status}`);
@@ -110,7 +125,7 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  }, [user?.accessToken]);
+  }, [user?.accessToken, granularity, predMonths, predWeeks]);
 
   const fetchGradForecast = useCallback(async () => {
     try {
@@ -119,22 +134,34 @@ export default function Reports() {
     } catch { /* graduation date not set — silently skip */ }
   }, [user?.accessToken]);
 
+  const fetchWeeklySummary = useCallback(async () => {
+    try {
+      const res = await fetch(`${API}/transactions/weekly-summary`, { headers });
+      if (res.ok) setWeeklySummary(await res.json());
+    } catch { /* silent */ }
+  }, [user?.accessToken]);
+
   useEffect(() => {
     if (user?.accessToken) {
-      fetchForecast(predMonths);
+      fetchForecast();
       fetchGradForecast();
+      if (granularity === 'weekly') fetchWeeklySummary();
     }
-  }, [predMonths, fetchForecast, fetchGradForecast]);
+  }, [granularity, predMonths, predWeeks, fetchForecast, fetchGradForecast, fetchWeeklySummary]);
 
   // ── Build combined chart data ──────────────────────
   const chartData: ChartPoint[] = forecast ? [
     ...forecast.history.map(h => ({
-      label:  monthLabel(h.year, h.month),
+      label: granularity === 'weekly' && h.week != null
+        ? weekLabel(h.year, h.week)
+        : monthLabel(h.year, h.month ?? 1),
       actual: h.total,
       isForecast: false,
     })),
     ...forecast.predictions.map(p => ({
-      label:     monthLabel(p.year, p.month),
+      label: granularity === 'weekly' && p.week != null
+        ? weekLabel(p.year, p.week)
+        : monthLabel(p.year, p.month ?? 1),
       median:    p.median,
       lower:     p.lower,
       bandWidth: p.upper - p.lower,
@@ -146,17 +173,19 @@ export default function Reports() {
   const totalProjected  = forecast?.predictions.reduce((s, p) => s + p.median, 0) ?? 0;
   const avgProjected    = forecast?.predictions.length
     ? totalProjected / forecast.predictions.length : 0;
-  const peakMonth       = forecast?.predictions.reduce(
+  const peakPeriod      = forecast?.predictions.reduce(
     (max, p) => p.median > max.median ? p : max,
-    forecast.predictions[0] ?? { median: 0, year: 0, month: 0 }
+    forecast.predictions[0] ?? { median: 0, year: 0, month: 1, week: 1 }
   );
 
   const gradTotal       = gradForecast?.predictions.reduce((s, p) => s + p.median, 0) ?? 0;
   const gradMonths      = gradForecast?.predictions.length ?? 0;
 
-  // ── Find the boundary index for the reference line ─
-  const boundaryLabel   = forecast?.predictions[0]
-    ? monthLabel(forecast.predictions[0].year, forecast.predictions[0].month)
+  // ── Find the boundary label for the reference line ─
+  const boundaryLabel = forecast?.predictions[0]
+    ? granularity === 'weekly' && forecast.predictions[0].week != null
+      ? weekLabel(forecast.predictions[0].year, forecast.predictions[0].week)
+      : monthLabel(forecast.predictions[0].year, forecast.predictions[0].month ?? 1)
     : null;
 
   // ─────────────────────────────────────────────────────
@@ -174,12 +203,26 @@ export default function Reports() {
             Powered by Amazon Chronos-2 · historical actuals + probabilistic predictions
           </p>
         </div>
-        <button
-          onClick={() => fetchForecast(predMonths)}
-          style={{ marginLeft: 'auto', background: 'transparent', border: '1px solid #7a0000', color: '#FFE4E1', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
-        >
-          <RefreshCw size={14} /> Refresh
-        </button>
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Weekly / Monthly toggle */}
+          {(['weekly', 'monthly'] as const).map(g => (
+            <button key={g} onClick={() => setGranularity(g)} style={{
+              padding: '5px 14px', fontSize: 13, borderRadius: 4,
+              background: granularity === g ? '#FFD700' : 'transparent',
+              color:      granularity === g ? '#550000' : '#FFE4E1',
+              border:     granularity === g ? 'none' : '1px solid #7a0000',
+              fontWeight: granularity === g ? 700 : 400, cursor: 'pointer',
+            }}>
+              {g === 'weekly' ? 'Weekly' : 'Monthly'}
+            </button>
+          ))}
+          <button
+            onClick={() => fetchForecast()}
+            style={{ background: 'transparent', border: '1px solid #7a0000', color: '#FFE4E1', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+          >
+            <RefreshCw size={14} /> Refresh
+          </button>
+        </div>
       </div>
 
       {/* ── Warning banners ── */}
@@ -210,20 +253,30 @@ export default function Reports() {
       {forecast && !loading && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
           <Card>
-            <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>TOTAL PROJECTED ({predMonths}mo)</div>
+            <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>
+              TOTAL PROJECTED ({granularity === 'weekly' ? `${predWeeks}wk` : `${predMonths}mo`})
+            </div>
             <div style={{ color: '#FFD700', fontSize: 24, fontWeight: 700 }}>{usd(totalProjected)}</div>
           </Card>
           <Card>
-            <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>AVG / MONTH</div>
+            <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>
+              {granularity === 'weekly' ? 'AVG / WEEK' : 'AVG / MONTH'}
+            </div>
             <div style={{ color: '#FFD700', fontSize: 24, fontWeight: 700 }}>{usd(avgProjected)}</div>
           </Card>
           <Card>
-            <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>PEAK FORECAST MONTH</div>
-            <div style={{ color: '#FFD700', fontSize: 24, fontWeight: 700 }}>
-              {peakMonth ? monthLabel(peakMonth.year, peakMonth.month) : '—'}
+            <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>
+              {granularity === 'weekly' ? 'PEAK FORECAST WEEK' : 'PEAK FORECAST MONTH'}
             </div>
-            {peakMonth && (
-              <div style={{ color: '#FFE4E1', fontSize: 12 }}>{usd(peakMonth.median)}</div>
+            <div style={{ color: '#FFD700', fontSize: 24, fontWeight: 700 }}>
+              {peakPeriod
+                ? (granularity === 'weekly' && peakPeriod.week != null
+                    ? weekLabel(peakPeriod.year, peakPeriod.week)
+                    : monthLabel(peakPeriod.year, peakPeriod.month ?? 1))
+                : '—'}
+            </div>
+            {peakPeriod && (
+              <div style={{ color: '#FFE4E1', fontSize: 12 }}>{usd(peakPeriod.median)}</div>
             )}
           </Card>
         </div>
@@ -233,27 +286,33 @@ export default function Reports() {
       <Card style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div>
-            <div style={{ color: '#FFE4E1', fontWeight: 600, fontSize: 15 }}>Monthly Spending — History & Forecast</div>
+            <div style={{ color: '#FFE4E1', fontWeight: 600, fontSize: 15 }}>
+              {granularity === 'weekly' ? 'Weekly' : 'Monthly'} Spending — History & Forecast
+            </div>
             <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>
               Gray bars = actual · Gold line = forecast median · Shaded band = confidence interval
             </div>
           </div>
-          {/* Month selector */}
+          {/* Period selector */}
           <div style={{ display: 'flex', gap: 6 }}>
-            {[3, 6, 12].map(m => (
-              <button
-                key={m}
-                onClick={() => setPredMonths(m)}
-                style={{
-                  padding: '5px 14px', fontSize: 13,
-                  background: predMonths === m ? '#FFD700' : 'transparent',
-                  color:      predMonths === m ? '#550000' : '#FFE4E1',
-                  border:     predMonths === m ? 'none' : '1px solid #7a0000',
-                }}
-              >
-                {m}mo
-              </button>
-            ))}
+            {granularity === 'weekly'
+              ? [4, 8, 12, 26].map(w => (
+                  <button key={w} onClick={() => setPredWeeks(w)} style={{
+                    padding: '5px 12px', fontSize: 13,
+                    background: predWeeks === w ? '#FFD700' : 'transparent',
+                    color:      predWeeks === w ? '#550000' : '#FFE4E1',
+                    border:     predWeeks === w ? 'none' : '1px solid #7a0000',
+                  }}>{w}wk</button>
+                ))
+              : [3, 6, 12].map(m => (
+                  <button key={m} onClick={() => setPredMonths(m)} style={{
+                    padding: '5px 14px', fontSize: 13,
+                    background: predMonths === m ? '#FFD700' : 'transparent',
+                    color:      predMonths === m ? '#550000' : '#FFE4E1',
+                    border:     predMonths === m ? 'none' : '1px solid #7a0000',
+                  }}>{m}mo</button>
+                ))
+            }
           </div>
         </div>
 
@@ -265,7 +324,7 @@ export default function Reports() {
           <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ textAlign: 'center', color: '#888' }}>
               <Info size={32} style={{ marginBottom: 8 }} />
-              <div>No data yet. Import transactions or set up Forecast Context.</div>
+              <div>No data yet. Import transactions to generate a forecast.</div>
             </div>
           </div>
         ) : (
@@ -359,8 +418,59 @@ export default function Reports() {
         </Card>
       )}
 
-      {/* ── Historical monthly table ── */}
-      {forecast && forecast.history.length > 0 && (
+      {/* ── Historical table (weekly or monthly) ── */}
+      {granularity === 'weekly' && weeklySummary && weeklySummary.length > 0 && (
+        <Card>
+          <div style={{ color: '#FFE4E1', fontWeight: 600, fontSize: 15, marginBottom: 16 }}>
+            Weekly Spending History
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #7a0000' }}>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', color: '#888', fontWeight: 500 }}>Week</th>
+                  <th style={{ textAlign: 'left', padding: '8px 12px', color: '#888', fontWeight: 500 }}>Dates</th>
+                  <th style={{ textAlign: 'right', padding: '8px 12px', color: '#888', fontWeight: 500 }}>Total Spent</th>
+                  <th style={{ textAlign: 'right', padding: '8px 12px', color: '#888', fontWeight: 500 }}>vs. Avg</th>
+                  <th style={{ padding: '8px 12px' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const avg = weeklySummary.reduce((s, w) => s + w.total, 0) / weeklySummary.length;
+                  const maxT = Math.max(...weeklySummary.map(w => w.total));
+                  return [...weeklySummary].reverse().map((w, i) => {
+                    const pct = avg > 0 ? ((w.total - avg) / avg) * 100 : 0;
+                    const barW = Math.min(Math.abs(w.total / maxT) * 100, 100);
+                    const fmtDate = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid rgba(122,0,0,0.3)' }}>
+                        <td style={{ padding: '10px 12px', color: '#FFE4E1' }}>{weekLabel(w.year, w.week)}</td>
+                        <td style={{ padding: '10px 12px', color: '#aaa', fontSize: 12 }}>
+                          {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
+                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', color: '#FFD700', fontWeight: 600 }}>{usd(w.total)}</td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 12 }}>
+                          <span style={{ color: pct > 0 ? '#f87171' : '#4ade80' }}>
+                            {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
+                          </span>
+                        </td>
+                        <td style={{ padding: '10px 12px', width: 120 }}>
+                          <div style={{ height: 6, background: '#2d0a0a', borderRadius: 3 }}>
+                            <div style={{ height: '100%', width: `${barW}%`, background: '#FFD700', borderRadius: 3, opacity: 0.7 }} />
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  });
+                })()}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {granularity === 'monthly' && forecast && forecast.history.length > 0 && (
         <Card>
           <div style={{ color: '#FFE4E1', fontWeight: 600, fontSize: 15, marginBottom: 16 }}>
             Historical Monthly Spend
@@ -384,12 +494,10 @@ export default function Reports() {
                     return (
                       <tr key={i} style={{ borderBottom: '1px solid rgba(122,0,0,0.3)' }}>
                         <td style={{ padding: '10px 12px', color: '#FFE4E1' }}>
-                          {monthLabel(h.year, h.month)}
+                          {monthLabel(h.year, h.month ?? 1)}
                           {h.synthetic && <span style={{ color: '#888', fontSize: 11, marginLeft: 6 }}>(estimated)</span>}
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', color: '#FFD700', fontWeight: 600 }}>
-                          {usd(h.total)}
-                        </td>
+                        <td style={{ padding: '10px 12px', textAlign: 'right', color: '#FFD700', fontWeight: 600 }}>{usd(h.total)}</td>
                         <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 12 }}>
                           <span style={{ color: pct > 0 ? '#f87171' : '#4ade80' }}>
                             {pct > 0 ? '+' : ''}{pct.toFixed(1)}%

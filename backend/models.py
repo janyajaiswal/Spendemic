@@ -223,7 +223,7 @@ class User(Base):
     income_frequency: Optional[IncomeFrequencyEnum] = Column(
         Enum(IncomeFrequencyEnum),
         nullable=True
-    )
+    )  # TODO: expose in Settings UI or drop in next cleanup sprint
     scholarship_amount: Optional[float] = Column(Numeric(10, 2), nullable=True)
     scholarship_frequency: Optional[ScholarshipFrequencyEnum] = Column(
         Enum(ScholarshipFrequencyEnum),
@@ -235,12 +235,19 @@ class User(Base):
     student_status: Optional[StudentStatusEnum] = Column(
         Enum(StudentStatusEnum),
         nullable=True
-    )
+    )  # TODO: expose in Settings UI (academic status affects forecast work-hour logic)
     visa_type: Optional[VisaTypeEnum] = Column(Enum(VisaTypeEnum), nullable=True)
     max_work_hours_per_week: Optional[int] = Column(Integer, nullable=True)
     graduation_date: Optional[date] = Column(Date, nullable=True)
 
+    # Academic break schedule (specific dates; month+day used for annual recurrence)
+    summer_break_start: Optional[date] = Column(Date, nullable=True)
+    summer_break_end: Optional[date] = Column(Date, nullable=True)
+    winter_break_start: Optional[date] = Column(Date, nullable=True)
+    winter_break_end: Optional[date] = Column(Date, nullable=True)
+
     # Loan Information
+    # TODO: expose in Settings UI or drop in next cleanup sprint (no forecast usage currently)
     total_loan_amount: Optional[float] = Column(Numeric(10, 2), nullable=True)
     monthly_loan_payment: Optional[float] = Column(Numeric(10, 2), nullable=True)
     loan_start_date: Optional[date] = Column(Date, nullable=True)
@@ -518,6 +525,12 @@ class ForecastContext(Base):
     exchange_rate: Optional[float] = Column(Numeric(10, 6), nullable=True)
     health_insurance: bool = Column(Boolean, default=False, nullable=False)
     rent: Optional[float] = Column(Numeric(10, 2), nullable=True)
+    hourly_rate: Optional[float] = Column(Numeric(8, 2), nullable=True)   # $/hr — income derived as hourly_rate × hours_per_week × (52/12)
+    break_hourly_rate: Optional[float] = Column(Numeric(8, 2), nullable=True)   # reduced $/hr during break period
+    break_hours_per_week: Optional[float] = Column(Numeric(5, 1), nullable=True)  # reduced hours/week during break
+    income_amount: Optional[float] = Column(Numeric(12, 2), nullable=True)  # actual monthly income in USD
+    food_estimate: Optional[float] = Column(Numeric(10, 2), nullable=True)  # estimated food/groceries
+    utilities_estimate: Optional[float] = Column(Numeric(10, 2), nullable=True)  # estimated utilities
 
     created_at: datetime = Column(DateTime(timezone=True), server_default=func.now())
     updated_at: Optional[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
