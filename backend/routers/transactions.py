@@ -2,14 +2,20 @@
 Transactions router — CRUD + monthly summary.
 All endpoints require a valid JWT (Bearer token).
 """
+import csv
+import io
+import os
+import uuid as uuid_lib
 from calendar import monthrange
 from datetime import date, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
 
@@ -17,7 +23,12 @@ from database import get_db
 from models import Transaction, TransactionTypeEnum, CategoryEnum, RecurringFrequencyEnum
 from routers.auth import get_current_user
 from routers.exchange_rates import _FALLBACK_RATES
-from schemas import TransactionCreate, TransactionUpdate, TransactionResponse, TransactionSummary, WeeklyTransactionSummary
+from schemas import TransactionCreate, TransactionUpdate, TransactionResponse, TransactionSummary, WeeklyTransactionSummary, ReceiptUploadResponse
+
+RECEIPTS_DIR = Path(__file__).parent.parent / "uploads" / "receipts"
+RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_RECEIPT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
+MAX_RECEIPT_BYTES = 10 * 1024 * 1024  # 10 MB
 
 router = APIRouter(prefix="/api/v1/transactions", tags=["transactions"])
 
@@ -139,6 +150,8 @@ def list_transactions(
     category: Optional[CategoryEnum] = Query(None),
     year: Optional[int] = Query(None, ge=2000, le=2100),
     month: Optional[int] = Query(None, ge=1, le=12),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     current_user=Depends(get_current_user),
@@ -156,6 +169,10 @@ def list_transactions(
         q = q.filter(extract("year", Transaction.transaction_date) == year)
     if month:
         q = q.filter(extract("month", Transaction.transaction_date) == month)
+    if start_date:
+        q = q.filter(Transaction.transaction_date >= start_date)
+    if end_date:
+        q = q.filter(Transaction.transaction_date <= end_date)
 
     return (
         q.order_by(Transaction.transaction_date.desc(), Transaction.created_at.desc())
@@ -302,3 +319,106 @@ def delete_transaction(
     tx = _get_transaction_or_404(transaction_id, current_user.id, db)
     db.delete(tx)
     db.commit()
+
+
+@router.get("/export", response_class=StreamingResponse)
+def export_transactions_csv(
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Download transactions as a CSV file."""
+    q = db.query(Transaction).filter(Transaction.user_id == current_user.id)
+    if year:
+        q = q.filter(extract("year", Transaction.transaction_date) == year)
+    if month:
+        q = q.filter(extract("month", Transaction.transaction_date) == month)
+    if start_date:
+        q = q.filter(Transaction.transaction_date >= start_date)
+    if end_date:
+        q = q.filter(Transaction.transaction_date <= end_date)
+    rows = q.order_by(Transaction.transaction_date.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["date", "type", "category", "amount", "currency", "amount_usd", "description", "notes", "recurring"])
+    for t in rows:
+        writer.writerow([
+            t.transaction_date.isoformat(),
+            t.type.value,
+            t.category.value,
+            float(t.amount),
+            t.currency.value,
+            float(t.amount_in_usd) if t.amount_in_usd else "",
+            t.description or "",
+            t.notes or "",
+            t.recurring_frequency.value if t.is_recurring and t.recurring_frequency else "",
+        ])
+    output.seek(0)
+    filename = f"transactions_{date.today().isoformat()}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.post("/{transaction_id}/receipt", response_model=ReceiptUploadResponse)
+async def upload_receipt(
+    transaction_id: UUID,
+    request: Request,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload a receipt image for a transaction. Returns a suggested category."""
+    tx = _get_transaction_or_404(transaction_id, current_user.id, db)
+
+    if file.content_type not in ALLOWED_RECEIPT_TYPES:
+        raise HTTPException(status_code=415, detail="Unsupported file type. Allowed: jpeg, png, webp, gif")
+    contents = await file.read()
+    if len(contents) > MAX_RECEIPT_BYTES:
+        raise HTTPException(status_code=413, detail="Receipt image must be under 10 MB")
+
+    user_dir = RECEIPTS_DIR / str(current_user.id)
+    user_dir.mkdir(parents=True, exist_ok=True)
+    ext = file.content_type.split("/")[1].replace("jpeg", "jpg")
+    filename = f"{transaction_id}.{ext}"
+    (user_dir / filename).write_bytes(contents)
+
+    base_url = str(request.base_url).rstrip("/")
+    receipt_url = f"{base_url}/uploads/receipts/{current_user.id}/{filename}"
+
+    tx.receipt_url = receipt_url
+    db.commit()
+
+    # Attempt LLM category suggestion from description + filename heuristic
+    suggested_category = _guess_category_from_description(tx.description or file.filename or "")
+
+    return ReceiptUploadResponse(
+        receipt_url=receipt_url,
+        suggested_category=suggested_category,
+    )
+
+
+def _guess_category_from_description(text: str) -> Optional[str]:
+    """Simple keyword-based category guesser as a fallback when LLM is unavailable."""
+    text = text.lower()
+    mapping = {
+        "FOOD": ["restaurant", "cafe", "coffee", "pizza", "burger", "sushi", "boba", "grocery", "safeway", "trader joe", "aldi", "walmart food", "chipotle", "mcdonald", "starbucks"],
+        "TRANSPORTATION": ["uber", "lyft", "bus", "metro", "gas", "parking", "bart", "mta"],
+        "HOUSING": ["rent", "lease", "apartment", "landlord"],
+        "UTILITIES": ["electric", "internet", "wifi", "phone", "at&t", "verizon", "t-mobile", "comcast"],
+        "EDUCATION": ["tuition", "textbook", "course", "udemy", "coursera", "amazon books"],
+        "HEALTHCARE": ["pharmacy", "cvs", "walgreens", "doctor", "clinic", "insurance"],
+        "ENTERTAINMENT": ["netflix", "spotify", "hulu", "movie", "concert", "ticket"],
+        "TRAVEL": ["flight", "airline", "hotel", "airbnb", "expedia", "booking"],
+        "SHOPPING": ["amazon", "target", "walmart", "h&m", "zara", "clothing"],
+    }
+    for category, keywords in mapping.items():
+        if any(kw in text for kw in keywords):
+            return category
+    return None

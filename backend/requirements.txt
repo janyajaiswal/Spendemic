@@ -14,5 +14,6 @@ python-dateutil
 openpyxl
 pandas
 anthropic
+openai
 torch
 git+https://github.com/amazon-science/chronos-forecasting.git

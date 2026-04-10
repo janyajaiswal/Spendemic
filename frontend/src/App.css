@@ -5,6 +5,7 @@
 
 .main-content {
   flex: 1;
-  padding: 40px;
+  min-width: 0;
   overflow-y: auto;
+  background: var(--bg-main);
 }

@@ -4,6 +4,7 @@ import type { CredentialResponse } from '@react-oauth/google';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, User, ArrowLeft, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import '../styles/auth.css';
 
 const API_BASE = 'http://localhost:8000';
 
@@ -241,59 +242,50 @@ export default function Auth() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div style={s.container}>
-      <button style={s.backButton} onClick={() => navigate('/')}
-        onMouseEnter={e => { e.currentTarget.style.background = 'rgba(107,26,42,0.15)'; }}
-        onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
+    <div className="auth-container">
+      <button className="auth-back-btn" onClick={() => navigate('/')}>
         <ArrowLeft size={18} /> Back to Home
       </button>
 
-      <div style={s.card} className="fade-in">
-        <Link to="/" style={s.title}>Spendemic</Link>
+      <div className="auth-card fade-in">
+        <Link to="/" className="auth-title">Spendemic</Link>
 
-        {/* ── OTP step ── */}
         {mode === 'signup' && step === 'otp' ? (
           <>
-            <div style={s.otpHeader}>
+            <div className="auth-otp-header">
               <ShieldCheck size={40} color="var(--brand-gold)" />
-              <p style={s.subtitle}>Check your email</p>
-              <p style={s.otpHint}>{successMsg}</p>
+              <p className="auth-subtitle">Check your email</p>
+              <p className="auth-otp-hint">{successMsg}</p>
             </div>
 
-            <form onSubmit={handleVerifyOTP} style={s.form}>
-              <div style={s.inputGroup}>
+            <form onSubmit={handleVerifyOTP} className="auth-form">
+              <div className="auth-input-group">
                 <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  placeholder="000000"
+                  type="text" inputMode="numeric" maxLength={6} placeholder="000000"
                   value={otpCode}
                   onChange={e => setOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                  style={{ ...s.otpInput, ...(errors.otp ? s.inputError : {}) }}
+                  className={`auth-otp-input${errors.otp ? ' has-error' : ''}`}
                   autoFocus
                 />
               </div>
-              {errors.otp && <p style={s.errorText}>{errors.otp}</p>}
+              {errors.otp && <p className="auth-error-text">{errors.otp}</p>}
 
-              <div style={s.timerRow}>
+              <div className="auth-timer-row">
                 <span style={{ color: remaining > 0 ? 'var(--brand-gold)' : '#e74c3c' }}>
                   {remaining > 0 ? `Expires in ${formatted}` : 'Code expired'}
                 </span>
-                <button
-                  type="button"
-                  style={{ ...s.resendBtn, opacity: remaining > 0 ? 0.4 : 1, cursor: remaining > 0 ? 'not-allowed' : 'pointer' }}
-                  onClick={handleResendOTP}
-                  disabled={remaining > 0 || loading}
-                >
+                <button type="button" className="auth-resend-btn"
+                  style={{ opacity: remaining > 0 ? 0.4 : 1, cursor: remaining > 0 ? 'not-allowed' : 'pointer' }}
+                  onClick={handleResendOTP} disabled={remaining > 0 || loading}>
                   Resend code
                 </button>
               </div>
 
-              <button type="submit" style={s.submitButton} disabled={loading}>
+              <button type="submit" className="auth-submit-btn" disabled={loading}>
                 {loading ? 'Verifying…' : 'Verify & Create Account'}
               </button>
 
-              <button type="button" style={s.ghostBtn}
+              <button type="button" className="auth-ghost-btn"
                 onClick={() => { setStep('form'); setErrors({}); setOtpCode(''); setSuccessMsg(''); }}>
                 ← Back to sign up
               </button>
@@ -301,130 +293,120 @@ export default function Auth() {
           </>
         ) : (
           <>
-            <p style={s.subtitle}>
+            <p className="auth-subtitle">
               {mode === 'signin' ? 'Welcome back!' : 'Create your free account'}
             </p>
 
-            {/* Tabs */}
-            <div style={s.tabs}>
+            <div className="auth-tabs">
               {(['signin', 'signup'] as Mode[]).map(m => (
-                <button key={m} style={{ ...s.tab, ...(mode === m ? s.tabActive : {}) }}
+                <button key={m} className={`auth-tab${mode === m ? ' active' : ''}`}
                   onClick={() => switchMode(m)}>
                   {m === 'signin' ? 'Sign In' : 'Sign Up'}
                 </button>
               ))}
             </div>
 
-            {/* General error */}
-            {errors.general && <div style={s.alertError}>{errors.general}</div>}
+            {errors.general && <div className="auth-alert-error">{errors.general}</div>}
 
-            <form onSubmit={mode === 'signin' ? handleSignIn : handleSignupRequest} style={s.form}>
-              {/* Name — signup only */}
+            <form onSubmit={mode === 'signin' ? handleSignIn : handleSignupRequest} className="auth-form">
               {mode === 'signup' && (
                 <div>
-                  <div style={{ ...s.inputGroup, ...(errors.name ? s.inputGroupError : {}) }}>
-                    <User size={18} style={s.inputIcon} />
+                  <div className={`auth-input-group${errors.name ? ' has-error' : ''}`}>
+                    <span className="auth-input-icon"><User size={18} /></span>
                     <input type="text" placeholder="Full Name" value={name}
                       onChange={e => setName(e.target.value)}
-                      style={s.input} autoComplete="name" />
+                      className="auth-input" autoComplete="name" />
                   </div>
-                  {errors.name && <p style={s.errorText}>{errors.name}</p>}
+                  {errors.name && <p className="auth-error-text">{errors.name}</p>}
                 </div>
               )}
 
-              {/* Email */}
               <div>
-                <div style={{ ...s.inputGroup, ...(errors.email ? s.inputGroupError : {}) }}>
-                  <Mail size={18} style={s.inputIcon} />
+                <div className={`auth-input-group${errors.email ? ' has-error' : ''}`}>
+                  <span className="auth-input-icon"><Mail size={18} /></span>
                   <input type="email" placeholder="Email Address" value={email}
                     onChange={e => setEmail(e.target.value)}
-                    style={s.input} autoComplete="email" />
+                    className="auth-input" autoComplete="email" />
                 </div>
-                {errors.email && <p style={s.errorText}>{errors.email}</p>}
+                {errors.email && <p className="auth-error-text">{errors.email}</p>}
               </div>
 
-              {/* Password */}
               <div>
-                <div style={{ ...s.inputGroup, ...(errors.password ? s.inputGroupError : {}) }}>
-                  <Lock size={18} style={s.inputIcon} />
+                <div className={`auth-input-group${errors.password ? ' has-error' : ''}`}>
+                  <span className="auth-input-icon"><Lock size={18} /></span>
                   <input type={showPassword ? 'text' : 'password'} placeholder="Password" value={password}
                     onChange={e => setPassword(e.target.value)}
-                    style={{ ...s.input, paddingRight: '44px' }}
+                    className="auth-input" style={{ paddingRight: '44px' }}
                     autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} />
-                  <button type="button" style={s.eyeBtn} onClick={() => setShowPassword(v => !v)}
+                  <button type="button" className="auth-eye-btn" onClick={() => setShowPassword(v => !v)}
                     tabIndex={-1} aria-label={showPassword ? 'Hide password' : 'Show password'}>
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
-                {errors.password && <p style={s.errorText}>{errors.password}</p>}
+                {errors.password && <p className="auth-error-text">{errors.password}</p>}
 
-                {/* Password strength meter — signup only */}
                 {mode === 'signup' && password.length > 0 && (
-                  <div style={s.strengthWrap}>
-                    <div style={s.strengthBar}>
+                  <div className="auth-strength-wrap">
+                    <div className="auth-strength-bar">
                       {[0, 1, 2, 3].map(i => (
-                        <div key={i} style={{
-                          ...s.strengthSegment,
+                        <div key={i} className="auth-strength-segment" style={{
                           background: i <= pwStrength.score - 1 && pwStrength.score > 0
                             ? pwStrength.color : 'rgba(255,255,255,0.1)',
                         }} />
                       ))}
                     </div>
-                    <span style={{ ...s.strengthLabel, color: pwStrength.color }}>
+                    <span className="auth-strength-label" style={{ color: pwStrength.color }}>
                       {pwStrength.label}
                     </span>
                   </div>
                 )}
               </div>
 
-              {/* Confirm password — signup only */}
               {mode === 'signup' && (
                 <div>
-                  <div style={{ ...s.inputGroup, ...(errors.confirmPassword ? s.inputGroupError : {}) }}>
-                    <Lock size={18} style={s.inputIcon} />
+                  <div className={`auth-input-group${errors.confirmPassword ? ' has-error' : ''}`}>
+                    <span className="auth-input-icon"><Lock size={18} /></span>
                     <input type={showConfirm ? 'text' : 'password'} placeholder="Confirm Password"
                       value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}
-                      style={{ ...s.input, paddingRight: '44px' }} autoComplete="new-password" />
-                    <button type="button" style={s.eyeBtn} onClick={() => setShowConfirm(v => !v)}
-                      tabIndex={-1}>
+                      className="auth-input" style={{ paddingRight: '44px' }} autoComplete="new-password" />
+                    <button type="button" className="auth-eye-btn" onClick={() => setShowConfirm(v => !v)} tabIndex={-1}>
                       {showConfirm ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
-                  {errors.confirmPassword && <p style={s.errorText}>{errors.confirmPassword}</p>}
+                  {errors.confirmPassword && <p className="auth-error-text">{errors.confirmPassword}</p>}
                 </div>
               )}
 
-              {/* Forgot password — signin only */}
               {mode === 'signin' && (
                 <div style={{ textAlign: 'right', marginTop: '-8px' }}>
-                  <span style={s.switchLink}>Forgot password?</span>
+                  <button type="button" className="auth-switch-link">Forgot password?</button>
                 </div>
               )}
 
-              <button type="submit" style={s.submitButton} disabled={loading}>
+              <button type="submit" className="auth-submit-btn" disabled={loading}>
                 {loading
                   ? (mode === 'signin' ? 'Signing in…' : 'Sending code…')
                   : (mode === 'signin' ? 'Sign In' : 'Send Verification Code')}
               </button>
             </form>
 
-            <div style={s.divider}>
-              <span style={s.dividerLine} />
-              <span style={s.dividerText}>or</span>
-              <span style={s.dividerLine} />
+            <div className="auth-divider">
+              <span className="auth-divider-line" />
+              <span className="auth-divider-text">or</span>
+              <span className="auth-divider-line" />
             </div>
 
-            <div style={s.googleWrapper}>
+            <div className="auth-google-wrapper">
               <GoogleLogin onSuccess={handleGoogleSuccess} onError={() => {}}
                 theme="filled_black" size="large" width="320"
                 text={mode === 'signin' ? 'signin_with' : 'signup_with'} shape="rectangular" />
             </div>
 
-            <p style={s.switchText}>
+            <p className="auth-switch-text">
               {mode === 'signin' ? "Don't have an account? " : 'Already have an account? '}
-              <span style={s.switchLink} onClick={() => switchMode(mode === 'signin' ? 'signup' : 'signin')}>
+              <button className="auth-switch-link" onClick={() => switchMode(mode === 'signin' ? 'signup' : 'signin')}>
                 {mode === 'signin' ? 'Sign Up' : 'Sign In'}
-              </span>
+              </button>
             </p>
           </>
         )}
@@ -433,119 +415,3 @@ export default function Auth() {
   );
 }
 
-// ─── Styles ───────────────────────────────────────────────────────────────────
-
-const s: Record<string, React.CSSProperties> = {
-  container: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center',
-    justifyContent: 'center', minHeight: '100%', padding: '40px 20px',
-    position: 'relative',
-  },
-  backButton: {
-    position: 'absolute', top: '20px', left: '20px',
-    display: 'flex', alignItems: 'center', gap: '8px',
-    background: 'transparent', color: 'var(--brand-gold)',
-    border: '1px solid var(--brand-gold)', padding: '8px 16px',
-    borderRadius: '8px', cursor: 'pointer', fontSize: '0.9em',
-    transition: 'all 0.3s ease',
-  },
-  card: {
-    background: 'linear-gradient(135deg, var(--brand-maroon) 0%, var(--brand-maroon-dark) 100%)',
-    borderRadius: '20px', padding: '40px', width: '100%', maxWidth: '420px',
-    border: '1px solid var(--brand-maroon-light)',
-    boxShadow: '0 15px 50px rgba(0,0,0,0.5), 0 0 30px rgba(255,215,0,0.1)',
-  },
-  title: {
-    fontSize: '2.5em',
-    background: 'linear-gradient(135deg, var(--brand-gold) 0%, var(--brand-gold-dark) 100%)',
-    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-    margin: '0 0 5px 0', fontWeight: 800, textAlign: 'center', display: 'block',
-    textDecoration: 'none',
-  },
-  subtitle: {
-    color: 'var(--brand-rose)', textAlign: 'center',
-    margin: '0 0 20px 0', fontSize: '1.1em', opacity: 0.9,
-  },
-  otpHeader: {
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginBottom: '20px',
-  },
-  otpHint: {
-    color: 'var(--brand-rose)', fontSize: '0.85em', textAlign: 'center',
-    opacity: 0.8, margin: 0,
-  },
-  tabs: {
-    display: 'flex', marginBottom: '20px', borderRadius: '10px',
-    overflow: 'hidden', border: '1px solid var(--brand-maroon-light)',
-  },
-  tab: {
-    flex: 1, padding: '12px', background: 'transparent', color: 'var(--brand-rose)',
-    border: 'none', cursor: 'pointer', fontSize: '1em', fontWeight: 600,
-    transition: 'all 0.3s ease',
-  },
-  tabActive: {
-    background: 'linear-gradient(135deg, var(--brand-gold) 0%, var(--brand-gold-dark) 100%)',
-    color: 'var(--brand-maroon)',
-  },
-  form: { display: 'flex', flexDirection: 'column', gap: '14px' },
-  inputGroup: {
-    position: 'relative', display: 'flex', alignItems: 'center',
-    border: '1px solid var(--brand-maroon-light)', borderRadius: '10px',
-    transition: 'border-color 0.3s ease',
-  },
-  inputGroupError: { borderColor: '#e74c3c' },
-  inputIcon: { position: 'absolute', left: '14px', color: 'var(--brand-gold)', pointerEvents: 'none' },
-  input: {
-    width: '100%', padding: '14px 14px 14px 44px', borderRadius: '10px',
-    border: 'none', background: 'rgba(0,0,0,0.3)', color: 'var(--text-light)',
-    fontSize: '1em', fontFamily: 'inherit', outline: 'none',
-  },
-  eyeBtn: {
-    position: 'absolute', right: '12px', background: 'transparent',
-    border: 'none', color: 'var(--brand-gold)', cursor: 'pointer',
-    display: 'flex', alignItems: 'center', padding: '4px',
-  },
-  errorText: { color: '#e74c3c', fontSize: '0.8em', margin: '4px 0 0 4px' },
-  alertError: {
-    background: 'rgba(231,76,60,0.15)', border: '1px solid rgba(231,76,60,0.4)',
-    borderRadius: '8px', padding: '10px 14px', color: '#e74c3c', fontSize: '0.9em',
-  },
-  strengthWrap: {
-    display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px', paddingLeft: '4px',
-  },
-  strengthBar: { display: 'flex', gap: '4px', flex: 1 },
-  strengthSegment: { flex: 1, height: '4px', borderRadius: '2px', transition: 'background 0.3s ease' },
-  strengthLabel: { fontSize: '0.78em', fontWeight: 600, minWidth: '40px' },
-  timerRow: {
-    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    fontSize: '0.85em',
-  },
-  resendBtn: {
-    background: 'transparent', border: 'none', color: 'var(--brand-gold)',
-    fontWeight: 600, fontSize: '0.85em', textDecoration: 'underline',
-  },
-  otpInput: {
-    width: '100%', padding: '18px', textAlign: 'center' as const,
-    fontSize: '2em', fontWeight: 700, letterSpacing: '12px',
-    borderRadius: '10px', border: '2px solid var(--brand-maroon-light)',
-    background: 'rgba(0,0,0,0.3)', color: 'var(--brand-gold)',
-    fontFamily: 'monospace', outline: 'none',
-  },
-  inputError: { borderColor: '#e74c3c' },
-  submitButton: {
-    padding: '14px',
-    background: 'linear-gradient(135deg, var(--brand-gold) 0%, var(--brand-gold-dark) 100%)',
-    color: 'var(--brand-maroon)', border: 'none', borderRadius: '10px',
-    fontSize: '1.05em', fontWeight: 700, cursor: 'pointer', marginTop: '4px',
-    opacity: 1, transition: 'opacity 0.2s',
-  },
-  ghostBtn: {
-    background: 'transparent', border: 'none', color: 'var(--brand-rose)',
-    fontSize: '0.9em', cursor: 'pointer', textAlign: 'center' as const, padding: '4px',
-  },
-  divider: { display: 'flex', alignItems: 'center', gap: '15px', margin: '20px 0' },
-  dividerLine: { flex: 1, height: '1px', background: 'var(--brand-maroon-light)' },
-  dividerText: { color: 'var(--brand-rose)', fontSize: '0.9em', opacity: 0.7 },
-  googleWrapper: { display: 'flex', justifyContent: 'center', marginBottom: '20px' },
-  switchText: { textAlign: 'center' as const, color: 'var(--brand-rose)', fontSize: '0.9em', margin: 0 },
-  switchLink: { color: 'var(--brand-gold)', cursor: 'pointer', fontWeight: 600, textDecoration: 'underline' },
-};

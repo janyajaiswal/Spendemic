@@ -268,6 +268,7 @@ class User(Base):
     last_login: Optional[datetime] = Column(DateTime(timezone=True), nullable=True)
     is_active: bool = Column(Boolean, default=True)
     email_verified: bool = Column(Boolean, default=False)
+    onboarding_completed: bool = Column(Boolean, default=False, nullable=False)
 
     # Relationships
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
@@ -275,6 +276,9 @@ class User(Base):
     budgets = relationship("Budget", back_populates="user", cascade="all, delete-orphan")
     alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
     forecast_contexts = relationship("ForecastContext", back_populates="user", cascade="all, delete-orphan")
+    jobs = relationship("Job", back_populates="user", cascade="all, delete-orphan")
+    goals = relationship("Goal", back_populates="user", cascade="all, delete-orphan")
+    faq_submissions = relationship("FAQSubmission", back_populates="user", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_users_email", "email"),
@@ -375,6 +379,10 @@ class Transaction(Base):
         index=True,
     )  # Set on auto-generated child transactions; None on the template
     is_generated: bool = Column(Boolean, default=False, nullable=False)
+
+    # Receipt & notes
+    receipt_url: Optional[str] = Column(String(500), nullable=True)
+    notes: Optional[str] = Column(Text, nullable=True)
 
     # Timestamps
     created_at: datetime = Column(DateTime(timezone=True), server_default=func.now())
@@ -576,3 +584,144 @@ class ExchangeRateCache(Base):
             f"<ExchangeRateCache({self.from_currency}->{self.to_currency} "
             f"@ {self.rate}, fetched {self.fetched_at})>"
         )
+
+
+# ==================== JOBS ====================
+
+class JobTypeEnum(str, enum.Enum):
+    ON_CAMPUS = "ON_CAMPUS"
+    INTERNSHIP = "INTERNSHIP"
+    CO_OP = "CO_OP"
+    FREELANCE = "FREELANCE"
+    OTHER = "OTHER"
+
+
+class Job(Base):
+    """
+    Tracks each individual job a student holds.
+    Supports multiple concurrent jobs (on-campus, internship, co-op, freelance).
+    Monthly income = sum of (hourly_rate × hours_per_week × 52/12) across active jobs.
+    """
+    __tablename__ = "jobs"
+
+    id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: UUID = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    job_name: str = Column(String(200), nullable=False)
+    employer: Optional[str] = Column(String(200), nullable=True)
+    hourly_rate: float = Column(Numeric(8, 2), nullable=False)
+    hours_per_week: float = Column(Numeric(5, 1), nullable=False)
+    job_type: Optional[JobTypeEnum] = Column(Enum(JobTypeEnum), nullable=True)
+    start_date: Optional[date] = Column(Date, nullable=True)
+    end_date: Optional[date] = Column(Date, nullable=True)
+    is_active: bool = Column(Boolean, default=True, nullable=False)
+
+    created_at: datetime = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="jobs")
+    hours_log = relationship("JobHoursLog", back_populates="job", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_jobs_user_id", "user_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Job(id={self.id}, user={self.user_id}, name={self.job_name})>"
+
+
+# ==================== GOALS ====================
+
+class Goal(Base):
+    """
+    Savings goals funded only from net-positive monthly surplus.
+    Users can allocate up to (monthly_income - monthly_expenses) toward a goal.
+    """
+    __tablename__ = "goals"
+
+    id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: UUID = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    name: str = Column(String(200), nullable=False)
+    target_amount: float = Column(Numeric(10, 2), nullable=False)
+    saved_amount: float = Column(Numeric(10, 2), default=0, nullable=False)
+    currency: str = Column(String(3), default="USD", nullable=False)
+    deadline: Optional[date] = Column(Date, nullable=True)
+    is_active: bool = Column(Boolean, default=True, nullable=False)
+
+    created_at: datetime = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="goals")
+
+    __table_args__ = (
+        Index("ix_goals_user_id", "user_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Goal(id={self.id}, user={self.user_id}, name={self.name})>"
+
+
+# ==================== JOB HOURS LOG ====================
+
+class JobHoursLog(Base):
+    __tablename__ = "job_hours_log"
+
+    id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    job_id: UUID = Column(
+        UUID(as_uuid=True),
+        ForeignKey("jobs.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    week_start_date: date = Column(Date, nullable=False)
+    hours_worked: float = Column(Numeric(5, 1), nullable=False)
+    created_at: datetime = Column(DateTime(timezone=True), server_default=func.now())
+
+    job = relationship("Job", back_populates="hours_log")
+
+    __table_args__ = (
+        UniqueConstraint("job_id", "week_start_date", name="uq_job_hours_log_job_week"),
+        Index("ix_job_hours_log_job_id", "job_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<JobHoursLog(job={self.job_id}, week={self.week_start_date}, hrs={self.hours_worked})>"
+
+
+# ==================== FAQ SUBMISSIONS ====================
+
+class FAQStatusEnum(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class FAQSubmission(Base):
+    __tablename__ = "faq_submissions"
+
+    id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: UUID = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    question: str = Column(Text, nullable=False)
+    answer: Optional[str] = Column(Text, nullable=True)
+    category: Optional[str] = Column(String(100), nullable=True)
+    status: FAQStatusEnum = Column(
+        Enum(FAQStatusEnum), nullable=False, default=FAQStatusEnum.PENDING
+    )
+    created_at: datetime = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="faq_submissions")
+
+    __table_args__ = (
+        Index("ix_faq_submissions_user_id", "user_id"),
+        Index("ix_faq_submissions_status", "status"),
+    )

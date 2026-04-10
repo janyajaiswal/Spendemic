@@ -1,0 +1,219 @@
+/* Budgets */
+
+.budgets-page {
+  padding: 32px 36px;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.budgets-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 28px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.budgets-title {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+.budgets-tab-bar {
+  display: flex;
+  gap: 2px;
+  background: rgba(255, 227, 180, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 4px;
+  margin-bottom: 24px;
+}
+
+.budgets-tab-btn {
+  flex: 1;
+  padding: 9px 16px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.budgets-tab-btn.active {
+  background: var(--accent);
+  color: var(--teal-900, #071e1c);
+  font-weight: 700;
+}
+
+[data-theme="light"] .budgets-tab-btn.active {
+  background: var(--teal-600);
+  color: #fff;
+}
+
+.budgets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.budget-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.budget-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.budget-card-label {
+  font-size: 0.82em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.budget-amounts {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.budget-spent {
+  font-size: 1.3em;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.budget-limit {
+  font-size: 0.82em;
+  color: var(--text-secondary);
+  opacity: 0.6;
+}
+
+.budget-progress-bar {
+  height: 5px;
+  background: rgba(255, 227, 180, 0.1);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.budget-progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+
+/* Colorblind-safe status */
+.status-ok   .budget-progress-fill { background: #2dd4bf; }
+.status-warn .budget-progress-fill { background: #f59e0b; }
+.status-over .budget-progress-fill { background: #f87171; }
+
+.status-ok   .budget-card { border-color: rgba(45, 212, 191, 0.2); }
+.status-warn .budget-card { border-color: rgba(245, 158, 11, 0.2); }
+.status-over .budget-card { border-color: rgba(248, 113, 113, 0.2); }
+
+.budgets-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 20px;
+  background: var(--accent);
+  color: var(--teal-900, #071e1c);
+  border: none;
+  border-radius: 9px;
+  font-size: 0.875em;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+[data-theme="light"] .budgets-add-btn {
+  background: var(--teal-600);
+  color: #fff;
+}
+
+.budgets-export-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text-secondary);
+  font-size: 0.875em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.budgets-export-btn:hover {
+  border-color: var(--border-focus);
+  color: var(--accent);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Goals */
+.goal-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.goal-progress-bar {
+  height: 5px;
+  background: rgba(255, 227, 180, 0.1);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.goal-progress-fill {
+  height: 100%;
+  border-radius: 99px;
+  background: var(--accent);
+  transition: width 0.4s ease;
+}
+
+/* Overlay / Modal */
+.budgets-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 20px;
+}
+
+.budgets-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  width: 100%;
+  max-width: 440px;
+  max-height: 90vh;
+  overflow-y: auto;
+}

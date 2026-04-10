@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { User, MapPin, BookOpen, Save, CheckCircle, AlertCircle } from 'lucide-react';
+import { User, MapPin, BookOpen, Save, CheckCircle, AlertCircle, Briefcase } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import '../styles/settings.css';
 
 const API_BASE = 'http://localhost:8000';
 
-type Tab = 'profile' | 'address' | 'academic';
+type Tab = 'profile' | 'address' | 'academic' | 'jobs';
 
 interface ProfileData {
   name: string;
@@ -50,6 +51,55 @@ const CURRENCIES = [
   'MXN','BRL','KRW','THB','PHP','NGN','PKR','BDT','ZAR','TRY',
 ];
 
+interface Job {
+  id: string;
+  job_name: string;
+  employer: string | null;
+  hourly_rate: string;
+  hours_per_week: string;
+  job_type: string;
+  start_date: string | null;
+  end_date: string | null;
+  is_active: boolean;
+  monthly_income: number;
+}
+
+interface JobForm {
+  job_name: string;
+  employer: string;
+  hourly_rate: string;
+  hours_per_week: string;
+  job_type: string;
+  start_date: string;
+  end_date: string;
+}
+
+const EMPTY_JOB_FORM: JobForm = {
+  job_name: '', employer: '', hourly_rate: '', hours_per_week: '',
+  job_type: 'ON_CAMPUS', start_date: '', end_date: '',
+};
+
+const JOB_TYPES: Record<string, string> = {
+  ON_CAMPUS: 'On-Campus', INTERNSHIP: 'Internship', CO_OP: 'Co-op',
+  FREELANCE: 'Freelance', OTHER: 'Other',
+};
+
+interface HoursEntry {
+  id: string;
+  job_id: string;
+  week_start_date: string;
+  hours_worked: number;
+  weekly_pay: number;
+}
+
+function getMondayOfCurrentWeek(): string {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().split('T')[0];
+}
+
 export default function Settings() {
   const { user, loginDirect } = useAuth();
   const [tab, setTab] = useState<Tab>('profile');
@@ -60,6 +110,23 @@ export default function Settings() {
   const [fetchLoading, setFetchLoading] = useState(true);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Jobs state
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [showJobModal, setShowJobModal] = useState(false);
+  const [editJobId, setEditJobId] = useState<string | null>(null);
+  const [jobForm, setJobForm] = useState<JobForm>(EMPTY_JOB_FORM);
+  const [jobSaving, setJobSaving] = useState(false);
+  const [jobError, setJobError] = useState('');
+
+  // Weekly hours log state
+  const [hoursModalJobId, setHoursModalJobId] = useState<string | null>(null);
+  const [hoursModalJobName, setHoursModalJobName] = useState('');
+  const [hoursWeekStart, setHoursWeekStart] = useState(getMondayOfCurrentWeek());
+  const [hoursWorked, setHoursWorked] = useState('');
+  const [hoursSaving, setHoursSaving] = useState(false);
+  const [jobHoursMap, setJobHoursMap] = useState<Record<string, HoursEntry[]>>({});
 
   const token = user?.accessToken;
 
@@ -212,6 +279,109 @@ export default function Settings() {
     }
   };
 
+  // ── Jobs ───────────────────────────────────────────────────────────────────
+
+  const loadJobs = async () => {
+    setJobsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/jobs`, { headers: authHeaders });
+      if (res.ok) setJobs(await res.json());
+    } finally {
+      setJobsLoading(false);
+    }
+  };
+
+  useEffect(() => { if (tab === 'jobs') loadJobs(); }, [tab]);
+
+  const openAddJob = () => {
+    setJobForm(EMPTY_JOB_FORM); setEditJobId(null); setJobError(''); setShowJobModal(true);
+  };
+
+  const openEditJob = (j: Job) => {
+    setJobForm({
+      job_name: j.job_name, employer: j.employer ?? '',
+      hourly_rate: j.hourly_rate, hours_per_week: j.hours_per_week,
+      job_type: j.job_type, start_date: j.start_date ?? '', end_date: j.end_date ?? '',
+    });
+    setEditJobId(j.id); setJobError(''); setShowJobModal(true);
+  };
+
+  const handleSaveJob = async () => {
+    if (!jobForm.job_name || !jobForm.hourly_rate || !jobForm.hours_per_week) {
+      setJobError('Job name, hourly rate, and hours/week are required'); return;
+    }
+    setJobSaving(true); setJobError('');
+    const payload: Record<string, unknown> = {
+      job_name: jobForm.job_name,
+      employer: jobForm.employer || null,
+      hourly_rate: parseFloat(jobForm.hourly_rate),
+      hours_per_week: parseFloat(jobForm.hours_per_week),
+      job_type: jobForm.job_type,
+      start_date: jobForm.start_date || null,
+      end_date: jobForm.end_date || null,
+    };
+    const url = editJobId ? `${API_BASE}/api/v1/jobs/${editJobId}` : `${API_BASE}/api/v1/jobs`;
+    const method = editJobId ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: authHeaders, body: JSON.stringify(payload) });
+    if (!res.ok) {
+      const d = await res.json();
+      setJobError(typeof d.detail === 'string' ? d.detail : 'Save failed');
+      setJobSaving(false); return;
+    }
+    setShowJobModal(false); loadJobs();
+    setJobSaving(false);
+  };
+
+  const handleDeleteJob = async (id: string) => {
+    if (!confirm('Remove this job?')) return;
+    await fetch(`${API_BASE}/api/v1/jobs/${id}`, { method: 'DELETE', headers: authHeaders });
+    loadJobs();
+  };
+
+  const openHoursModal = async (j: Job) => {
+    setHoursModalJobId(j.id);
+    setHoursModalJobName(j.job_name);
+    setHoursWeekStart(getMondayOfCurrentWeek());
+    setHoursWorked('');
+    if (!jobHoursMap[j.id]) {
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/jobs/${j.id}/hours`, { headers: authHeaders });
+        if (res.ok) {
+          const data = await res.json() as HoursEntry[];
+          setJobHoursMap(prev => ({ ...prev, [j.id]: data }));
+        }
+      } catch { /* ignore */ }
+    }
+  };
+
+  const closeHoursModal = () => {
+    setHoursModalJobId(null);
+    setHoursWorked('');
+  };
+
+  const handleSaveHours = async () => {
+    if (!hoursModalJobId || !hoursWorked) return;
+    setHoursSaving(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/jobs/${hoursModalJobId}/hours`, {
+        method: 'POST',
+        headers: authHeaders,
+        body: JSON.stringify({ week_start_date: hoursWeekStart, hours_worked: parseFloat(hoursWorked) }),
+      });
+      if (res.ok) {
+        const entry = await res.json() as HoursEntry;
+        setJobHoursMap(prev => {
+          const existing = (prev[hoursModalJobId] || []).filter(e => e.week_start_date !== entry.week_start_date);
+          return { ...prev, [hoursModalJobId]: [entry, ...existing].slice(0, 12) };
+        });
+        setHoursWorked('');
+        showToast('success', 'Hours logged!');
+      }
+    } finally {
+      setHoursSaving(false);
+    }
+  };
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   if (fetchLoading) {
@@ -249,7 +419,7 @@ export default function Settings() {
               : <div style={s.avatarFallback}>{(form.name || user.email)[0]?.toUpperCase()}</div>
             }
             <button style={s.cameraBtn} onClick={() => fileInputRef.current?.click()} title="Change photo">
-              📷
+              +
             </button>
             <input
               ref={fileInputRef}
@@ -262,7 +432,7 @@ export default function Settings() {
           <p style={s.avatarName}>{form.name || user.email}</p>
           <p style={s.avatarEmail}>{user.email}</p>
           <p style={s.avatarHint}>JPG, PNG, GIF or WebP · max 5 MB</p>
-          {avatarUploading && <p style={s.avatarPending}>⬆ Uploading…</p>}
+          {avatarUploading && <p style={s.avatarPending}>Uploading…</p>}
         </div>
 
         {/* ── Form panel ── */}
@@ -273,6 +443,7 @@ export default function Settings() {
               { id: 'profile', label: 'Profile', Icon: User },
               { id: 'address', label: 'Address', Icon: MapPin },
               { id: 'academic', label: 'Academic', Icon: BookOpen },
+              { id: 'jobs', label: 'Jobs', Icon: Briefcase },
             ] as { id: Tab; label: string; Icon: React.FC<{ size?: number }> }[]).map(({ id, label, Icon }) => (
               <button
                 key={id}
@@ -335,6 +506,121 @@ export default function Settings() {
               </>
             )}
 
+            {/* ── Jobs tab ── */}
+            {tab === 'jobs' && (
+              <div>
+                {/* Hours log modal */}
+                {hoursModalJobId && (
+                  <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 200 }}>
+                    <div style={{ background: 'var(--bg-secondary, #1e1a2e)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '14px', padding: '24px', width: '340px', maxWidth: '92vw' }}>
+                      <h3 style={{ margin: '0 0 16px', color: 'var(--brand-gold)', fontSize: '1em' }}>Log Hours — {hoursModalJobName}</h3>
+                      <Field label="Week starting (Monday)">
+                        <input style={s.input} type="date" value={hoursWeekStart} onChange={e => setHoursWeekStart(e.target.value)} />
+                      </Field>
+                      <Field label="Hours worked this week">
+                        <input style={s.input} type="number" min="0" max="168" step="0.5" value={hoursWorked}
+                          onChange={e => setHoursWorked(e.target.value)} placeholder="e.g. 20" />
+                      </Field>
+                      {jobHoursMap[hoursModalJobId]?.length > 0 && (
+                        <div style={{ marginTop: '12px', marginBottom: '8px' }}>
+                          <p style={{ margin: '0 0 6px', fontSize: '0.78em', color: 'var(--brand-rose)', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Recent weeks</p>
+                          <table style={{ width: '100%', fontSize: '0.8em', borderCollapse: 'collapse' }}>
+                            <thead>
+                              <tr style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'left' }}>
+                                <th style={{ paddingBottom: '4px', fontWeight: 500 }}>Week of</th>
+                                <th style={{ paddingBottom: '4px', fontWeight: 500 }}>Hours</th>
+                                <th style={{ paddingBottom: '4px', fontWeight: 500, textAlign: 'right' }}>Pay</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {jobHoursMap[hoursModalJobId].slice(0, 4).map(e => (
+                                <tr key={e.id} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                                  <td style={{ padding: '5px 0', color: 'var(--text-primary, #e8e3d8)' }}>{e.week_start_date}</td>
+                                  <td style={{ padding: '5px 0', color: 'var(--text-primary, #e8e3d8)' }}>{e.hours_worked}h</td>
+                                  <td style={{ padding: '5px 0', textAlign: 'right', color: '#2dd4bf', fontWeight: 600 }}>${e.weekly_pay.toFixed(2)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', gap: '10px', marginTop: '16px' }}>
+                        <button style={{ ...s.saveBtn, flex: 1 }} onClick={handleSaveHours} disabled={hoursSaving || !hoursWorked}>
+                          {hoursSaving ? 'Saving…' : 'Log Hours'}
+                        </button>
+                        <button style={{ ...s.cancelBtn, flex: 1 }} onClick={closeHoursModal}>Cancel</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <p style={{ margin: 0, fontSize: '0.88em', color: 'var(--brand-rose)', opacity: 0.7 }}>
+                    Track your jobs and log weekly hours.
+                  </p>
+                  <button style={s.saveBtn} onClick={openAddJob}>+ Add Job</button>
+                </div>
+                {jobsLoading ? (
+                  <p style={{ color: 'var(--brand-rose)', opacity: 0.5 }}>Loading jobs…</p>
+                ) : jobs.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--brand-rose)', opacity: 0.5 }}>
+                    <p style={{ margin: 0 }}>No jobs added yet.</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {jobs.map(j => (
+                      <div key={j.id} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '12px', padding: '16px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <div>
+                            <p style={{ margin: '0 0 4px', fontWeight: 700, color: 'var(--brand-gold)', fontSize: '1em' }}>{j.job_name}</p>
+                            {j.employer && <p style={{ margin: '0 0 4px', fontSize: '0.85em', color: 'var(--brand-rose)', opacity: 0.7 }}>{j.employer}</p>}
+                            <p style={{ margin: 0, fontSize: '0.82em', color: 'var(--brand-rose)', opacity: 0.55 }}>
+                              {JOB_TYPES[j.job_type] ?? j.job_type} · ${parseFloat(j.hourly_rate).toFixed(2)}/hr · {parseFloat(j.hours_per_week).toFixed(1)} hrs/wk
+                            </p>
+                            {(j.start_date || j.end_date) && (
+                              <p style={{ margin: '4px 0 0', fontSize: '0.78em', color: 'var(--brand-rose)', opacity: 0.45 }}>
+                                {j.start_date ?? '—'} → {j.end_date ?? 'ongoing'}
+                              </p>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                            <p style={{ margin: 0, fontWeight: 700, color: '#2dd4bf', fontSize: '0.95em' }}>
+                              ${j.monthly_income.toFixed(2)}/mo
+                            </p>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button style={{ ...s.iconBtnSmall, fontSize: '0.72em', padding: '4px 8px' }}
+                                onClick={() => openHoursModal(j)}>Log Hours</button>
+                              <button style={s.iconBtnSmall} onClick={() => openEditJob(j)}>Edit</button>
+                              <button style={s.iconBtnSmall} onClick={() => handleDeleteJob(j.id)}>Remove</button>
+                            </div>
+                          </div>
+                        </div>
+                        {jobHoursMap[j.id]?.length > 0 && (
+                          <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                            <p style={{ margin: '0 0 4px', fontSize: '0.73em', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Recent weeks</p>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              {jobHoursMap[j.id].slice(0, 4).map(e => (
+                                <div key={e.id} style={{ background: 'rgba(45,212,191,0.07)', border: '1px solid rgba(45,212,191,0.15)', borderRadius: '6px', padding: '4px 8px', fontSize: '0.75em' }}>
+                                  <span style={{ color: 'rgba(255,255,255,0.5)' }}>{e.week_start_date.slice(5)}</span>
+                                  <span style={{ color: '#2dd4bf', fontWeight: 600, marginLeft: '6px' }}>{e.hours_worked}h · ${e.weekly_pay.toFixed(0)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                    <div style={{ marginTop: '8px', padding: '14px', background: 'rgba(45,212,191,0.07)', border: '1px solid rgba(45,212,191,0.2)', borderRadius: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.9em', color: 'var(--brand-rose)', fontWeight: 600 }}>Total Monthly Income (est.)</span>
+                      <span style={{ fontSize: '1.1em', fontWeight: 700, color: '#2dd4bf' }}>
+                        ${jobs.reduce((acc, j) => acc + j.monthly_income, 0).toFixed(2)}/mo
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* ── Academic tab ── */}
             {tab === 'academic' && (
               <>
@@ -356,7 +642,7 @@ export default function Settings() {
                     return (
                       <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.35)', marginBottom: '4px' }}>
                         <p style={{ color: '#fbbf24', fontSize: '0.84em', margin: 0, fontWeight: 600 }}>
-                          🎓 Graduation in {daysLeft} day{daysLeft !== 1 ? 's' : ''} — are you still on track?
+                          Graduation in {daysLeft} day{daysLeft !== 1 ? 's' : ''} — are you still on track?
                         </p>
                         <p style={{ color: '#fbbf24', fontSize: '0.78em', margin: '4px 0 0', opacity: 0.8 }}>
                           If your date has changed, update it here so your forecast stays accurate.
@@ -460,14 +746,75 @@ export default function Settings() {
             )}
           </div>
 
-          <div style={s.saveRow}>
-            <button style={{ ...s.saveBtn, opacity: loading ? 0.7 : 1 }} onClick={handleSave} disabled={loading}>
-              <Save size={16} />
-              {loading ? 'Saving…' : 'Save Changes'}
-            </button>
-          </div>
+          {tab !== 'jobs' && (
+            <div style={s.saveRow}>
+              <button style={{ ...s.saveBtn, opacity: loading ? 0.7 : 1 }} onClick={handleSave} disabled={loading}>
+                <Save size={16} />
+                {loading ? 'Saving…' : 'Save Changes'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Job modal */}
+      {showJobModal && (
+        <div style={s.jobOverlay} onClick={() => setShowJobModal(false)}>
+          <div style={s.jobModal} onClick={e => e.stopPropagation()}>
+            <h2 style={{ margin: '0 0 20px', fontSize: '1.2em', fontWeight: 700, color: 'var(--brand-gold)' }}>
+              {editJobId ? 'Edit Job' : 'Add Job'}
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <Field label="Job Title *">
+                <input style={s.input} placeholder="e.g. Research Assistant" value={jobForm.job_name}
+                  onChange={e => setJobForm(f => ({ ...f, job_name: e.target.value }))} />
+              </Field>
+              <Field label="Employer">
+                <input style={s.input} placeholder="e.g. Cal State Fullerton" value={jobForm.employer}
+                  onChange={e => setJobForm(f => ({ ...f, employer: e.target.value }))} />
+              </Field>
+              <div style={s.row}>
+                <Field label="Hourly Rate ($/hr) *">
+                  <input style={s.input} type="number" min="0.01" step="0.01" placeholder="15.00" value={jobForm.hourly_rate}
+                    onChange={e => setJobForm(f => ({ ...f, hourly_rate: e.target.value }))} />
+                </Field>
+                <Field label="Hours / Week *">
+                  <input style={s.input} type="number" min="0.5" max="168" step="0.5" placeholder="20" value={jobForm.hours_per_week}
+                    onChange={e => setJobForm(f => ({ ...f, hours_per_week: e.target.value }))} />
+                </Field>
+              </div>
+              <Field label="Job Type">
+                <select style={{ ...s.input, ...s.select }} value={jobForm.job_type}
+                  onChange={e => setJobForm(f => ({ ...f, job_type: e.target.value }))}>
+                  {Object.entries(JOB_TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                </select>
+              </Field>
+              <div style={s.row}>
+                <Field label="Start Date">
+                  <input style={s.input} type="date" value={jobForm.start_date}
+                    onChange={e => setJobForm(f => ({ ...f, start_date: e.target.value }))} />
+                </Field>
+                <Field label="End Date">
+                  <input style={s.input} type="date" value={jobForm.end_date}
+                    onChange={e => setJobForm(f => ({ ...f, end_date: e.target.value }))} />
+                </Field>
+              </div>
+              {jobForm.hourly_rate && jobForm.hours_per_week && (
+                <p style={{ margin: 0, fontSize: '0.85em', color: '#4ade80', fontWeight: 600 }}>
+                  Monthly income: ${(parseFloat(jobForm.hourly_rate) * parseFloat(jobForm.hours_per_week) * (52 / 12)).toFixed(2)}
+                </p>
+              )}
+              {jobError && <p style={{ margin: 0, color: '#f87171', fontSize: '0.85em' }}>{jobError}</p>}
+              <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                <button style={s.cancelBtnJob} onClick={() => setShowJobModal(false)}>Cancel</button>
+                <button style={s.saveBtn} onClick={handleSaveJob} disabled={jobSaving}>
+                  {jobSaving ? 'Saving…' : editJobId ? 'Save Changes' : 'Add Job'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -610,5 +957,26 @@ const s: Record<string, React.CSSProperties> = {
     color: 'var(--brand-maroon)', border: 'none', borderRadius: '8px',
     fontWeight: 700, fontSize: '0.95em', cursor: 'pointer',
     transition: 'opacity 0.2s',
+  },
+  iconBtnSmall: {
+    background: 'none', border: 'none', cursor: 'pointer',
+    fontSize: '0.9em', padding: '4px', opacity: 0.7,
+  },
+  jobOverlay: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999,
+  },
+  jobModal: {
+    background: 'var(--brand-maroon-dark)', border: '1px solid rgba(255,215,0,0.2)',
+    borderRadius: '16px', padding: '32px', width: '460px', maxWidth: '95vw',
+    maxHeight: '90vh', overflowY: 'auto',
+  },
+  cancelBtnJob: {
+    padding: '10px 20px', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '8px', color: 'var(--brand-rose)', cursor: 'pointer',
+  },
+  cancelBtn: {
+    padding: '8px 16px', background: 'transparent', border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '8px', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', fontSize: '0.88em',
   },
 };

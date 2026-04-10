@@ -9,7 +9,9 @@
  */
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
+import '../styles/dashboard.css';
 
 const API = 'http://localhost:8000/api/v1';
 
@@ -17,10 +19,10 @@ const API = 'http://localhost:8000/api/v1';
 // Tab definitions
 // ─────────────────────────────────────────────────────
 const TABS = [
-  { id: 'overview',  label: '🏠 Overview' },
-  { id: 'health',    label: '📊 Financial Health' },
-  { id: 'visa',      label: '🛂 Visa & Work' },
-  { id: 'resources', label: '📚 Resources' },
+  { id: 'overview',  label: 'Overview' },
+  { id: 'health',    label: 'Financial Health' },
+  { id: 'visa',      label: 'Visa & Work' },
+  { id: 'resources', label: 'Resources' },
 ];
 
 // ─────────────────────────────────────────────────────
@@ -29,68 +31,52 @@ const TABS = [
 // ─────────────────────────────────────────────────────
 const FEATURES = [
   {
-    emoji: '💸',
     title: 'Transactions',
-    desc: '[Write 1–2 sentences: what users can do here — log income/expenses, multi-currency, recurring, what-if scenarios]',
-    link: '/expenses',
+    desc: 'Log every dollar in and out — in any currency. Spendemic auto-converts to your working currency, flags duplicates, and supports recurring payments so you never miss a bill.',
+    link: '/transactions',
     linkLabel: 'Go to Transactions',
-    color: '#4ade80',
   },
   {
-    emoji: '💼',
-    title: 'Budgets',
-    desc: '[Write 1–2 sentences: category-based spending limits, weekly or monthly, live progress bars, over-budget alerts]',
+    title: 'Budgets & Goals',
+    desc: 'Set monthly or weekly spending caps by category. Live progress bars show how much you\'ve used, and you\'ll get alerts at 80% and 100%. Create savings goals and fund them from your monthly surplus.',
     link: '/budgets',
     linkLabel: 'Manage Budgets',
-    color: '#fbbf24',
   },
   {
-    emoji: '📈',
     title: 'AI Forecasting',
-    desc: '[Write 1–2 sentences: Amazon Chronos time-series model predicts future spending, compares against LSTM benchmark]',
+    desc: 'Amazon Chronos-2, a zero-shot probabilistic time-series model, predicts your future income and expenses using historical transactions plus your forecast context (rent, breaks, tuition).',
     link: '/reports',
     linkLabel: 'View Reports',
-    color: '#a78bfa',
   },
   {
-    emoji: '💱',
     title: 'Multi-Currency',
-    desc: '[Write 1–2 sentences: live exchange rates, home currency vs working currency, automatic conversion on every transaction]',
-    link: '/expenses',
+    desc: 'Live exchange rates keep every transaction accurate. Set a home currency and a working currency — Spendemic shows all three values side by side so you always know what you\'re spending.',
+    link: '/transactions',
     linkLabel: 'Add Transaction',
-    color: '#63b3ed',
   },
   {
-    emoji: '🔁',
     title: 'Recurring Transactions',
-    desc: '[Write 1–2 sentences: set a transaction as recurring (daily → annually), system auto-generates entries on schedule]',
-    link: '/expenses',
+    desc: 'Mark rent, subscriptions, or stipends as recurring. The system automatically generates future entries on your chosen schedule (daily, weekly, bi-weekly, monthly, or annually).',
+    link: '/transactions',
     linkLabel: 'See Transactions',
-    color: '#f9a8d4',
   },
   {
-    emoji: '🎭',
     title: 'What-If Scenarios',
-    desc: '[Write 1–2 sentences: simulate hypothetical income/expenses — e.g. "if I get a raise" — without saving to your account]',
-    link: '/expenses',
+    desc: 'Simulate hypothetical changes — a raise, an unexpected tuition bill, or a summer stipend — and instantly see the impact on your monthly net. Scenarios never touch your real data.',
+    link: '/transactions',
     linkLabel: 'Try a Scenario',
-    color: '#fb923c',
   },
   {
-    emoji: '🛂',
     title: 'Visa & Work Compliance',
-    desc: '[Write 1–2 sentences: track weekly work hours against your visa cap, get alerts before you exceed the legal limit]',
+    desc: 'Track your weekly work hours against your visa cap (F-1 students: 20 hrs/wk on-campus during the semester). The Visa & Work tab gives a real-time compliance check.',
     link: '/dashboard',
     linkLabel: 'Check Compliance',
-    color: '#34d399',
   },
   {
-    emoji: '🔔',
     title: 'Smart Alerts',
-    desc: '[Write 1–2 sentences: rule-based notifications when budgets are 80% used, exceeded, or when recurring bills are due]',
+    desc: 'Rule-based notifications fire when any budget category hits 80% or exceeds its limit. Enable sound alerts for an audio chime whenever a new alert arrives — configurable per-device.',
     link: '/settings',
     linkLabel: 'Configure Alerts',
-    color: '#f87171',
   },
 ];
 
@@ -102,24 +88,25 @@ const VISA_RULES: { visa: string; rules: string[] }[] = [
   {
     visa: 'F-1 (Academic)',
     rules: [
-      '[Rule 1 — e.g. on-campus work limit during semester]',
-      '[Rule 2 — e.g. off-campus CPT/OPT rules]',
-      '[Rule 3 — e.g. summer / break exceptions]',
+      'On-campus work: up to 20 hrs/week during the academic semester; unlimited during official school breaks.',
+      'Off-campus work requires authorization — Curricular Practical Training (CPT) is tied to a course; Optional Practical Training (OPT) is applied for separately through USCIS.',
+      'Exceeding 20 hrs/week during the semester is a status violation that can trigger deportation proceedings. Track hours carefully.',
+      'Summer: if enrolled full-time in the next semester, you may work on-campus full-time (40 hrs/week) during summer break.',
     ],
   },
   {
     visa: 'J-1 (Exchange Visitor)',
     rules: [
-      '[Rule 1]',
-      '[Rule 2]',
-      '[Rule 3]',
+      'On-campus work: up to 20 hrs/week while school is in session; full-time during official breaks.',
+      'Off-campus work requires written authorization from your Responsible Officer (RO) and is limited to economic necessity or as a component of your exchange program.',
+      'Academic Training (AT) allows practical training directly related to your field of study for up to 18 months (or program length, whichever is shorter).',
     ],
   },
   {
     visa: 'Other / Not sure',
     rules: [
-      '[Pointer to DSO / ISSS office]',
-      '[Link to USCIS work authorization page]',
+      'Contact your Designated School Official (DSO) or International Student Services (ISSS) office before working — unauthorized work can void your visa status.',
+      'USCIS maintains the official work authorization guide at uscis.gov — search "students and exchange visitors" for your visa category.',
     ],
   },
 ];
@@ -128,36 +115,36 @@ const VISA_RULES: { visa: string; rules: string[] }[] = [
 // Resources tab sections
 // Fill in each tip or link yourself.
 // ─────────────────────────────────────────────────────
-const RESOURCE_SECTIONS = [
+const RESOURCE_SECTIONS: { title: string; items: { label: string; detail: string; href?: string }[] }[] = [
   {
-    title: '🏦 Banking & Finances',
+    title: 'Banking & Finances',
     items: [
-      { label: '[Resource name — e.g. "Open a US bank account"]', detail: '[1-line description + link placeholder]' },
-      { label: '[Resource name — e.g. "Build credit as an international student"]', detail: '[detail]' },
-      { label: '[Resource name — e.g. "Remittance / sending money home cheaply"]', detail: '[detail]' },
+      { label: 'Open a US bank account as an international student', detail: 'Most banks require a passport, I-20/DS-2019, and an SSN or ITIN. Chase, Bank of America, and credit unions like SchoolsFirst are popular choices at CSUF.', href: 'https://www.bankofamerica.com/student-banking/' },
+      { label: 'Build US credit without a credit history', detail: 'Secured credit cards (Discover it Secured, Capital One) and credit-builder loans let you establish a credit score. Aim for a score above 700 before graduation.', href: 'https://www.discover.com/credit-cards/secured/' },
+      { label: 'Send money home cheaply (Wise, Remitly)', detail: 'Wise offers mid-market exchange rates with transparent fees — typically 5–10× cheaper than a bank wire. Remitly is fast for urgent transfers.', href: 'https://wise.com/' },
     ],
   },
   {
-    title: '🎓 Scholarships & Aid',
+    title: 'Scholarships & Aid',
     items: [
-      { label: '[Resource — e.g. "CSUF International Student Scholarships"]', detail: '[detail]' },
-      { label: '[Resource — e.g. "CalFresh eligibility for students"]', detail: '[detail]' },
-      { label: '[Resource — e.g. "Emergency funds from ISSS"]', detail: '[detail]' },
+      { label: 'CSUF International Student Scholarships', detail: 'CSUF\'s scholarship portal lists merit-based awards open to F-1/J-1 students. Apply each semester via the CSUF Scholarship Application.', href: 'https://www.fullerton.edu/financialaid/scholarships/' },
+      { label: 'CalFresh (food assistance) for eligible students', detail: 'Some international students with certain immigration statuses are eligible. Visit the Student Wellness Center or CAPS for a screener.', href: 'https://www.fullerton.edu/studentwellness/calfresh/' },
+      { label: 'ISSS Emergency Fund', detail: 'CSUF\'s International Student Services offers emergency micro-grants for students facing unexpected financial hardship.', href: 'https://www.fullerton.edu/isss/' },
     ],
   },
   {
-    title: '📋 Tax & Legal',
+    title: 'Tax & Legal',
     items: [
-      { label: '[Resource — e.g. "ITIN vs SSN — what you need"]', detail: '[detail]' },
-      { label: '[Resource — e.g. "Filing taxes on F-1 / J-1 (Sprintax)"]', detail: '[detail]' },
-      { label: '[Resource — e.g. "Tax treaty benefits by country"]', detail: '[detail]' },
+      { label: 'ITIN vs SSN — which do you need?', detail: 'F-1/J-1 students without work authorization need an ITIN (W-7 form) to file taxes. Students with CPT/OPT can apply for an SSN.', href: 'https://www.irs.gov/individuals/individual-taxpayer-identification-number' },
+      { label: 'Filing US taxes as an F-1 or J-1 student (Sprintax)', detail: 'International students are non-resident aliens for tax purposes (first 5 years on F-1). Sprintax is the IRS-endorsed software for non-resident tax returns.', href: 'https://www.sprintax.com/' },
+      { label: 'US tax treaty benefits by country', detail: 'Many countries have treaties with the US that reduce or eliminate withholding tax on scholarships and stipends. Check IRS Publication 901.', href: 'https://www.irs.gov/individuals/international-taxpayers/tax-treaty-tables' },
     ],
   },
   {
-    title: '🏥 Health & Insurance',
+    title: 'Health & Insurance',
     items: [
-      { label: '[Resource — e.g. "CSUF student health insurance (SHIP)"]', detail: '[detail]' },
-      { label: '[Resource — e.g. "Medi-Cal eligibility for international students"]', detail: '[detail]' },
+      { label: 'CSUF Student Health Insurance (SHIP)', detail: 'CSUF requires health insurance coverage. The Student Health Insurance Plan (SHIP) is administered through Academic HealthPlans and covers most medical needs.', href: 'https://studenthealth.fullerton.edu/' },
+      { label: 'Medi-Cal eligibility for students', detail: 'Certain visa holders (including DACA, certain humanitarian statuses) may qualify for low-cost Medi-Cal coverage. Check Covered California for income-based options.', href: 'https://www.coveredca.com/' },
     ],
   },
 ];
@@ -189,14 +176,6 @@ function convert(amount: number, from: string, to: string, rates: Record<string,
   return (amount / rFrom) * rTo;
 }
 
-const CAT_EMOJI: Record<string, string> = {
-  FOOD: '🍔', RENT: '🏠', TRANSPORT: '🚌', UTILITIES: '💡',
-  HEALTHCARE: '🏥', EDUCATION: '📚', ENTERTAINMENT: '🎮',
-  CLOTHING: '👗', PERSONAL_CARE: '💄', SAVINGS: '💰',
-  SALARY: '💼', FREELANCE: '🖥️', SCHOLARSHIP: '🎓',
-  FAMILY_SUPPORT: '👨‍👩‍👧', CALFRESH: '🌾', WORK_STUDY: '🏫',
-  SIDE_HUSTLE: '⚡', INVESTMENT: '📈', OTHER: '📦',
-};
 
 // ─────────────────────────────────────────────────────
 // Component
@@ -209,14 +188,26 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<ComputedSummary | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loadingHealth, setLoadingHealth] = useState(false);
+  const [cashflow, setCashflow] = useState<{ month: string; income: number; expenses: number }[]>([]);
 
   // Work-hours tracker state (visa tab) — persisted to localStorage
   const [hoursWorked, setHoursWorked] = useState(() => localStorage.getItem('visa_hours') ?? '');
   const [visaType, setVisaType] = useState(() => localStorage.getItem('visa_type') ?? 'F-1 (Academic)');
   const hoursCap = visaType === 'F-1 (Academic)' ? 20 : visaType === 'J-1 (Exchange Visitor)' ? 20 : 20;
+  const [jobsTotalIncome, setJobsTotalIncome] = useState<number | null>(null);
 
   useEffect(() => { localStorage.setItem('visa_hours', hoursWorked); }, [hoursWorked]);
   useEffect(() => { localStorage.setItem('visa_type', visaType); }, [visaType]);
+
+  useEffect(() => {
+    if (activeTab !== 'visa') return;
+    const token = user?.accessToken ?? localStorage.getItem('spendemic_token') ?? '';
+    if (!token) return;
+    fetch(`${API}/jobs/total-income`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d) setJobsTotalIncome(d.total_monthly_income ?? 0); })
+      .catch(() => {});
+  }, [activeTab, user]);
 
   useEffect(() => {
     if (activeTab !== 'health') return;
@@ -267,6 +258,26 @@ export default function Dashboard() {
         // 5. Load budgets
         const bRes = await fetch(`${API}/budgets?active_only=true`, { headers: authHdr });
         if (bRes.ok) setBudgets(await bRes.json());
+
+        // 6. Build 6-month cashflow
+        const months: { month: string; income: number; expenses: number }[] = [];
+        for (let i = 5; i >= 0; i--) {
+          const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+          const y = d.getFullYear();
+          const m = d.getMonth() + 1;
+          const label = d.toLocaleString('default', { month: 'short', year: '2-digit' });
+          try {
+            const r = await fetch(`${API}/transactions?year=${y}&month=${m}&limit=200`, { headers: authHdr });
+            const txs: RawTx[] = r.ok ? await r.json() : [];
+            let inc = 0, exp = 0;
+            for (const tx of txs) {
+              const amt = convert(Number(tx.amount), tx.currency, workingCurrency, rates);
+              if (tx.type === 'INCOME') inc += amt; else exp += amt;
+            }
+            months.push({ month: label, income: Math.round(inc * 100) / 100, expenses: Math.round(exp * 100) / 100 });
+          } catch { months.push({ month: label, income: 0, expenses: 0 }); }
+        }
+        setCashflow(months);
       } finally {
         setLoadingHealth(false);
       }
@@ -288,7 +299,6 @@ export default function Dashboard() {
           <p style={s.subtitle}>Your financial hub — everything in one place</p>
         </div>
         <div style={s.searchBox}>
-          <span style={s.searchIcon}>🔍</span>
           <input
             style={s.searchInput}
             placeholder="Search features, tips, resources…"
@@ -321,8 +331,7 @@ export default function Dashboard() {
               Smart money management for international students
             </h2>
             <p style={s.heroSub}>
-              {/* [Write 2-3 sentences about what Spendemic does and who it's for] */}
-              [Write 2–3 sentences introducing Spendemic — what it does, who it's for, and what makes it different for international students specifically.]
+              Spendemic is an AI-powered financial planning app built specifically for international students. Track income and expenses in any currency, set budgets by category, and get probabilistic spending forecasts powered by Amazon Chronos-2 — all while staying on top of visa work-hour limits and scholarship deadlines. Unlike generic budgeting apps, Spendemic understands your world: tuition cycles, break periods, multi-currency remittances, and the financial pressures unique to studying abroad.
             </p>
           </div>
 
@@ -331,11 +340,10 @@ export default function Dashboard() {
           </h3>
           <div style={s.featureGrid}>
             {filteredFeatures.map(f => (
-              <div key={f.title} style={{ ...s.featureCard, borderColor: `${f.color}30` }}>
-                <span style={s.featureEmoji}>{f.emoji}</span>
-                <h4 style={{ ...s.featureTitle, color: f.color }}>{f.title}</h4>
+              <div key={f.title} style={s.featureCard}>
+                <h4 style={s.featureTitle}>{f.title}</h4>
                 <p style={s.featureDesc}>{f.desc}</p>
-                <Link to={f.link} style={{ ...s.featureLink, color: f.color }}>
+                <Link to={f.link} style={s.featureLink}>
                   {f.linkLabel} →
                 </Link>
               </div>
@@ -359,7 +367,7 @@ export default function Dashboard() {
                 <div style={s.currencyBanner}>
                   Amounts shown in <strong>{summary.workingCurrency}</strong>.
                   {' '}Not your currency?{' '}
-                  <Link to="/settings" style={{ color: 'var(--brand-gold)', fontWeight: 600 }}>Update in Settings →</Link>
+                  <Link to="/settings" style={{ color: 'var(--accent)', fontWeight: 600 }}>Update in Settings →</Link>
                 </div>
               )}
               {/* Monthly summary cards */}
@@ -387,7 +395,6 @@ export default function Dashboard() {
                   <div style={s.catGrid}>
                     {Object.entries(summary.by_category).map(([cat, amt]) => (
                       <div key={cat} style={s.catCard}>
-                        <span style={s.catEmoji}>{CAT_EMOJI[cat] ?? '📦'}</span>
                         <span style={s.catName}>{cat.replace(/_/g, ' ')}</span>
                         <span style={s.catAmt}>{summary.workingCurrency} {Number(amt).toFixed(2)}</span>
                       </div>
@@ -406,7 +413,7 @@ export default function Dashboard() {
                       const color = b.utilization >= 1 ? '#f87171' : b.utilization >= 0.8 ? '#fbbf24' : '#4ade80';
                       return (
                         <div key={b.id} style={s.budgetRow}>
-                          <span style={s.budgetCat}>{CAT_EMOJI[b.category] ?? '📦'} {b.category.replace(/_/g, ' ')}</span>
+                          <span style={s.budgetCat}>{b.category.replace(/_/g, ' ')}</span>
                           <div style={s.budgetBar}>
                             <div style={{ ...s.budgetBarFill, width: `${pct * 100}%`, background: color }} />
                           </div>
@@ -424,10 +431,33 @@ export default function Dashboard() {
                 </>
               )}
 
+              {cashflow.length > 0 && cashflow.some(m => m.income > 0 || m.expenses > 0) && (
+                <>
+                  <h3 style={s.sectionTitle}>6-Month Cash Flow</h3>
+                  <div style={{ background: 'rgba(255,227,180,0.03)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 8px 8px' }}>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={cashflow} margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,227,180,0.06)" />
+                        <XAxis dataKey="month" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} width={50} tickFormatter={v => `$${v}`} />
+                        <Tooltip
+                          contentStyle={{ background: '#0d3533', border: '1px solid rgba(255,227,180,0.1)', borderRadius: 8, fontSize: 12 }}
+                          labelStyle={{ color: '#ffe3b4', fontWeight: 600 }}
+                          formatter={(v: unknown, name: unknown) => [`$${Number(v).toFixed(2)}`, String(name)]}
+                        />
+                        <Legend wrapperStyle={{ fontSize: 12, color: 'var(--text-muted)' }} />
+                        <Bar dataKey="income" name="Income" fill="#2dd4bf" radius={[4,4,0,0]} />
+                        <Bar dataKey="expenses" name="Expenses" fill="#f59e0b" radius={[4,4,0,0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </>
+              )}
+
               {summary && summary.total_income === 0 && summary.total_expenses === 0 && (
                 <div style={s.emptyHint}>
                   <p>No transactions this month yet.</p>
-                  <Link to="/expenses" style={s.seeAll}>Add your first transaction →</Link>
+                  <Link to="/transactions" style={s.seeAll}>Add your first transaction →</Link>
                 </div>
               )}
             </>
@@ -465,12 +495,27 @@ export default function Dashboard() {
                 </div>
                 <p style={{ color: Number(hoursWorked) > hoursCap ? '#f87171' : '#4ade80', fontWeight: 600 }}>
                   {Number(hoursWorked) > hoursCap
-                    ? `⚠️ ${(Number(hoursWorked) - hoursCap).toFixed(1)} hrs over the ${hoursCap}-hr limit`
-                    : `✓ ${(hoursCap - Number(hoursWorked)).toFixed(1)} hrs remaining this week`}
+                    ? `${(Number(hoursWorked) - hoursCap).toFixed(1)} hrs over the ${hoursCap}-hr limit`
+                    : `${(hoursCap - Number(hoursWorked)).toFixed(1)} hrs remaining this week`}
                 </p>
               </div>
             )}
           </div>
+
+          {/* Jobs total income */}
+          {jobsTotalIncome !== null && (
+            <div style={{ background: 'rgba(45,212,191,0.06)', border: '1px solid rgba(45,212,191,0.2)', borderRadius: '12px', padding: '16px 20px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <p style={{ margin: 0, fontSize: '0.72em', color: 'var(--text-secondary)', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Total Monthly Income (all active jobs)</p>
+                <p style={{ margin: '4px 0 0', fontSize: '1.4em', fontWeight: 700, color: '#2dd4bf' }}>
+                  ${jobsTotalIncome.toFixed(2)}/mo
+                </p>
+              </div>
+              <Link to="/settings" style={{ fontSize: '0.875em', color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}>
+                Manage jobs →
+              </Link>
+            </div>
+          )}
 
           {/* Visa rules */}
           <h3 style={s.sectionTitle}>Work authorization rules</h3>
@@ -491,8 +536,7 @@ export default function Dashboard() {
       {activeTab === 'resources' && (
         <div>
           <p style={s.resourcesIntro}>
-            {/* [Write 1-2 sentences: curated guides for international students at CSUF / in the US] */}
-            [Write 1–2 sentences introducing this section — e.g. curated guides and links for international students navigating finances in the US.]
+            Curated guides and links for international students navigating finances in the US. Covers banking, scholarships, taxes, and health insurance — everything you need beyond the classroom.
           </p>
           {RESOURCE_SECTIONS
             .filter(sec => !q || sec.title.toLowerCase().includes(q)
@@ -505,7 +549,10 @@ export default function Dashboard() {
                     .filter(i => !q || i.label.toLowerCase().includes(q))
                     .map((item, idx) => (
                       <div key={idx} style={s.resCard}>
-                        <p style={s.resLabel}>{item.label}</p>
+                        {item.href
+                          ? <a href={item.href} target="_blank" rel="noopener noreferrer" style={{ ...s.resLabel, color: 'var(--accent)', textDecoration: 'none' }}>{item.label} ↗</a>
+                          : <p style={s.resLabel}>{item.label}</p>
+                        }
                         <p style={s.resDetail}>{item.detail}</p>
                       </div>
                     ))}
@@ -519,118 +566,114 @@ export default function Dashboard() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: '32px', maxWidth: '1100px', margin: '0 auto' },
-  topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', gap: '16px' },
-  title: { fontSize: '1.8em', fontWeight: 700, color: 'var(--brand-gold)', margin: 0 },
-  subtitle: { fontSize: '0.9em', color: 'var(--brand-rose)', opacity: 0.6, margin: '4px 0 0' },
+  page: { padding: '32px 36px', maxWidth: '1100px', margin: '0 auto' },
+  topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' },
+  title: { fontSize: '1.5em', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.3px', margin: 0 },
+  subtitle: { fontSize: '0.875em', color: 'var(--text-secondary)', opacity: 0.65, margin: '4px 0 0' },
   searchBox: {
     display: 'flex', alignItems: 'center', gap: '8px',
-    background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '10px', padding: '8px 14px', minWidth: '280px',
+    background: 'rgba(255,227,180,0.04)', border: '1px solid var(--border)',
+    borderRadius: '10px', padding: '8px 14px', minWidth: '260px',
   },
-  searchIcon: { fontSize: '0.9em', opacity: 0.6 },
   searchInput: {
     background: 'none', border: 'none', outline: 'none',
-    color: 'var(--brand-rose)', fontSize: '0.9em', flex: 1,
+    color: 'var(--text-primary)', fontSize: '0.875em', flex: 1, fontFamily: 'inherit',
   },
-  searchClear: { background: 'none', border: 'none', color: 'var(--brand-rose)', cursor: 'pointer', opacity: 0.5, fontSize: '0.85em' },
+  searchClear: { background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', opacity: 0.5, fontSize: '0.875em' },
   tabBar: {
-    display: 'flex', gap: '4px', borderBottom: '2px solid rgba(255,255,255,0.08)',
+    display: 'flex', gap: '4px', borderBottom: '1px solid var(--border)',
     marginBottom: '28px', overflowX: 'auto',
   },
   tab: {
     padding: '10px 20px', background: 'none', border: 'none', borderBottom: '2px solid transparent',
-    color: 'var(--brand-rose)', opacity: 0.6, cursor: 'pointer', fontSize: '0.9em',
-    fontWeight: 500, whiteSpace: 'nowrap', marginBottom: '-2px', transition: 'all 0.2s',
+    color: 'var(--text-secondary)', opacity: 0.6, cursor: 'pointer', fontSize: '0.875em',
+    fontWeight: 500, whiteSpace: 'nowrap', marginBottom: '-1px', transition: 'all 0.15s', fontFamily: 'inherit',
   },
-  tabActive: { opacity: 1, color: 'var(--brand-gold)', borderBottom: '2px solid var(--brand-gold)', fontWeight: 700 },
+  tabActive: { opacity: 1, color: 'var(--accent)', borderBottom: '2px solid var(--accent)', fontWeight: 700 },
 
   // Overview
   hero: {
-    background: 'linear-gradient(135deg, rgba(255,215,0,0.08), rgba(100,20,20,0.2))',
-    border: '1px solid rgba(255,215,0,0.15)', borderRadius: '16px',
+    background: 'rgba(255,227,180,0.04)',
+    border: '1px solid var(--border)', borderRadius: '14px',
     padding: '32px', marginBottom: '32px',
   },
-  heroTitle: { fontSize: '1.5em', fontWeight: 700, color: 'var(--brand-gold)', margin: '0 0 12px' },
-  heroSub: { color: 'var(--brand-rose)', opacity: 0.7, lineHeight: 1.7, margin: 0 },
-  sectionTitle: { fontSize: '1em', fontWeight: 600, color: 'var(--brand-rose)', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.06em', margin: '0 0 16px' },
-  featureGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '18px' },
+  heroTitle: { fontSize: '1.4em', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 12px', letterSpacing: '-0.3px' },
+  heroSub: { color: 'var(--text-secondary)', opacity: 0.7, lineHeight: 1.7, margin: 0, fontSize: '0.875em' },
+  sectionTitle: { fontSize: '0.7em', fontWeight: 700, color: 'var(--text-secondary)', opacity: 0.55, textTransform: 'uppercase', letterSpacing: '1px', margin: '24px 0 12px' },
+  featureGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' },
   featureCard: {
-    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '14px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '10px',
-    transition: 'transform 0.2s',
+    background: 'var(--bg-card)', border: '1px solid var(--border)',
+    borderRadius: '12px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '10px',
   },
-  featureEmoji: { fontSize: '2em' },
-  featureTitle: { fontSize: '1.05em', fontWeight: 700, margin: 0 },
-  featureDesc: { fontSize: '0.85em', color: 'var(--brand-rose)', opacity: 0.6, lineHeight: 1.6, flex: 1, margin: 0 },
-  featureLink: { fontSize: '0.85em', fontWeight: 600, textDecoration: 'none' },
-  noResults: { gridColumn: '1/-1', color: 'var(--brand-rose)', opacity: 0.5, textAlign: 'center' },
+  featureTitle: { fontSize: '1em', fontWeight: 700, margin: 0, color: 'var(--text-primary)' },
+  featureDesc: { fontSize: '0.83em', color: 'var(--text-secondary)', opacity: 0.65, lineHeight: 1.6, flex: 1, margin: 0 },
+  featureLink: { fontSize: '0.83em', fontWeight: 600, textDecoration: 'none', color: 'var(--accent)' },
+  noResults: { gridColumn: '1/-1', color: 'var(--text-secondary)', opacity: 0.5, textAlign: 'center' },
 
   // Health
-  loading: { color: 'var(--brand-rose)', opacity: 0.5 },
+  loading: { color: 'var(--text-secondary)', opacity: 0.5, fontSize: '0.875em' },
   currencyBanner: {
-    background: 'rgba(255,215,0,0.07)', border: '1px solid rgba(255,215,0,0.2)',
+    background: 'rgba(255,227,180,0.05)', border: '1px solid var(--border)',
     borderRadius: '8px', padding: '10px 14px', marginBottom: '20px',
-    fontSize: '0.85em', color: 'var(--brand-rose)',
+    fontSize: '0.875em', color: 'var(--text-secondary)',
   },
-  healthStrip: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '28px' },
+  healthStrip: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '28px' },
   healthCard: {
-    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--bg-card)', border: '1px solid var(--border)',
     borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px',
   },
-  healthLabel: { fontSize: '0.78em', color: 'var(--brand-rose)', opacity: 0.55, textTransform: 'uppercase', letterSpacing: '0.05em' },
-  healthValue: { fontSize: '1.5em', fontWeight: 700 },
-  catGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', marginBottom: '28px' },
+  healthLabel: { fontSize: '0.7em', color: 'var(--text-secondary)', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 },
+  healthValue: { fontSize: '1.4em', fontWeight: 700 },
+  catGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', marginBottom: '28px' },
   catCard: {
-    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--bg-card)', border: '1px solid var(--border)',
     borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center',
   },
-  catEmoji: { fontSize: '1.6em' },
-  catName: { fontSize: '0.72em', color: 'var(--brand-rose)', opacity: 0.55, textTransform: 'uppercase', textAlign: 'center' },
-  catAmt: { fontSize: '1em', fontWeight: 700, color: 'var(--brand-rose)' },
+  catName: { fontSize: '0.72em', color: 'var(--text-secondary)', opacity: 0.6, textTransform: 'uppercase', textAlign: 'center', letterSpacing: '0.4px' },
+  catAmt: { fontSize: '0.95em', fontWeight: 700, color: 'var(--text-primary)' },
   budgetList: { display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '12px' },
   budgetRow: { display: 'flex', alignItems: 'center', gap: '14px' },
-  budgetCat: { width: '160px', fontSize: '0.85em', color: 'var(--brand-rose)', flexShrink: 0 },
-  budgetBar: { flex: 1, height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' },
-  budgetBarFill: { height: '100%', borderRadius: '4px', transition: 'width 0.4s' },
-  budgetPct: { width: '40px', textAlign: 'right', fontSize: '0.82em', fontWeight: 700, flexShrink: 0 },
-  budgetAmt: { width: '120px', textAlign: 'right', fontSize: '0.78em', color: 'var(--brand-rose)', opacity: 0.5, flexShrink: 0 },
-  seeAll: { fontSize: '0.85em', color: 'var(--brand-gold)', fontWeight: 600 },
-  emptyHint: { textAlign: 'center', marginTop: '60px', color: 'var(--brand-rose)', opacity: 0.6 },
+  budgetCat: { width: '160px', fontSize: '0.83em', color: 'var(--text-secondary)', flexShrink: 0 },
+  budgetBar: { flex: 1, height: '6px', background: 'rgba(255,227,180,0.08)', borderRadius: '3px', overflow: 'hidden' },
+  budgetBarFill: { height: '100%', borderRadius: '3px', transition: 'width 0.4s' },
+  budgetPct: { width: '40px', textAlign: 'right', fontSize: '0.8em', fontWeight: 700, flexShrink: 0 },
+  budgetAmt: { width: '120px', textAlign: 'right', fontSize: '0.75em', color: 'var(--text-secondary)', opacity: 0.5, flexShrink: 0 },
+  seeAll: { fontSize: '0.83em', color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' },
+  emptyHint: { textAlign: 'center', marginTop: '60px', color: 'var(--text-secondary)', opacity: 0.5, fontSize: '0.875em' },
 
   // Visa
   visaTracker: {
-    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '14px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px',
+    background: 'var(--bg-card)', border: '1px solid var(--border)',
+    borderRadius: '12px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px',
     marginBottom: '28px', maxWidth: '480px',
   },
   formGroup: { display: 'flex', flexDirection: 'column', gap: '6px' },
-  label: { fontSize: '0.82em', color: 'var(--brand-rose)', opacity: 0.7, fontWeight: 500 },
+  label: { fontSize: '0.72em', color: 'var(--text-secondary)', opacity: 0.65, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.4px' },
   input: {
-    padding: '10px 12px', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-    borderRadius: '8px', color: 'var(--brand-rose)', fontSize: '0.95em', outline: 'none',
+    padding: '10px 12px', background: 'rgba(255,227,180,0.04)', border: '1px solid var(--border)',
+    borderRadius: '8px', color: 'var(--text-primary)', fontSize: '0.875em', outline: 'none', fontFamily: 'inherit',
   },
   hoursResult: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  hoursBarTrack: { height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '5px', overflow: 'hidden' },
-  hoursBarFill: { height: '100%', borderRadius: '5px', transition: 'width 0.4s' },
-  visaRulesGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px' },
+  hoursBarTrack: { height: '8px', background: 'rgba(255,227,180,0.08)', borderRadius: '4px', overflow: 'hidden' },
+  hoursBarFill: { height: '100%', borderRadius: '4px', transition: 'width 0.4s' },
+  visaRulesGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' },
   visaCard: {
-    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--bg-card)', border: '1px solid var(--border)',
     borderRadius: '12px', padding: '20px',
   },
-  visaCardTitle: { color: 'var(--brand-gold)', fontWeight: 700, fontSize: '0.95em', margin: '0 0 12px' },
+  visaCardTitle: { color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.95em', margin: '0 0 12px' },
   visaRuleList: { margin: 0, paddingLeft: '18px' },
-  visaRuleItem: { color: 'var(--brand-rose)', opacity: 0.7, fontSize: '0.85em', lineHeight: 1.7 },
+  visaRuleItem: { color: 'var(--text-secondary)', opacity: 0.7, fontSize: '0.83em', lineHeight: 1.7, marginBottom: '6px' },
 
   // Resources
-  resourcesIntro: { color: 'var(--brand-rose)', opacity: 0.7, lineHeight: 1.7, marginBottom: '28px' },
+  resourcesIntro: { color: 'var(--text-secondary)', opacity: 0.7, lineHeight: 1.7, marginBottom: '28px', fontSize: '0.875em' },
   resSection: { marginBottom: '32px' },
-  resSectionTitle: { fontSize: '1em', fontWeight: 700, color: 'var(--brand-gold)', marginBottom: '14px' },
+  resSectionTitle: { fontSize: '0.875em', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '14px' },
   resGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px' },
   resCard: {
-    background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)',
+    background: 'var(--bg-card)', border: '1px solid var(--border)',
     borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px',
   },
-  resLabel: { fontSize: '0.9em', fontWeight: 600, color: 'var(--brand-rose)', margin: 0 },
-  resDetail: { fontSize: '0.78em', color: 'var(--brand-rose)', opacity: 0.5, margin: 0, lineHeight: 1.5 },
+  resLabel: { fontSize: '0.875em', fontWeight: 600, color: 'var(--text-primary)', margin: 0 },
+  resDetail: { fontSize: '0.78em', color: 'var(--text-secondary)', opacity: 0.55, margin: 0, lineHeight: 1.55 },
 };

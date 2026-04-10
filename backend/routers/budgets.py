@@ -2,12 +2,15 @@
 Budgets router — CRUD + spend tracking per category.
 All endpoints require a valid JWT (Bearer token).
 """
+import csv
+import io
 from datetime import date
 from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
 
@@ -135,3 +138,40 @@ def delete_budget(
     b = _get_budget_or_404(budget_id, current_user.id, db)
     db.delete(b)
     db.commit()
+
+
+@router.get("/export", response_class=StreamingResponse)
+def export_budgets_csv(
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Download all budgets as a CSV file."""
+    budgets = (
+        db.query(Budget)
+        .filter(Budget.user_id == current_user.id)
+        .order_by(Budget.category)
+        .all()
+    )
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["category", "limit_amount", "currency", "period", "start_date", "end_date", "is_active", "spent", "utilization_pct"])
+    for b in budgets:
+        enriched = _enrich(b, db)
+        writer.writerow([
+            b.category.value,
+            float(b.limit_amount),
+            b.currency.value,
+            b.period.value,
+            b.start_date.isoformat(),
+            b.end_date.isoformat() if b.end_date else "",
+            b.is_active,
+            float(enriched.spent) if enriched.spent else 0.0,
+            round((enriched.utilization or 0.0) * 100, 1),
+        ])
+    output.seek(0)
+    filename = f"budgets_{date.today().isoformat()}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )

@@ -7,6 +7,7 @@ interface GoogleUser {
   name: string;
   picture: string;
   accessToken?: string;
+  onboarding_completed?: boolean;
 }
 
 interface AuthContextType {
@@ -33,7 +34,7 @@ function decodeGoogleJwt(credential: string): GoogleUser {
   };
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+export const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<GoogleUser | null>(() => {
@@ -64,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json() as {
         access_token: string;
         token_type: string;
-        user: { id: string; email: string; name: string };
+        user: { id: string; email: string; name: string; onboarding_completed: boolean };
       };
 
       const googleUser: GoogleUser = {
@@ -73,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: data.user.name,
         picture: localDecoded.picture,
         accessToken: data.access_token,
+        onboarding_completed: data.user.onboarding_completed,
       };
 
       setUser(googleUser);

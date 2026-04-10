@@ -20,6 +20,7 @@ from models import (
     BudgetPeriodEnum,
     AlertTypeEnum,
     RecurringFrequencyEnum,
+    JobTypeEnum,
 )
 
 
@@ -212,6 +213,7 @@ class UserResponse(BaseModel):
     loan_start_date: Optional[date] = None
     timezone: str
     notification_preferences: Optional[str] = None
+    onboarding_completed: bool = False
     created_at: datetime
     updated_at: Optional[datetime] = None
     last_login: Optional[datetime] = None
@@ -312,6 +314,8 @@ class TransactionUpdate(BaseModel):
     transaction_date: Optional[date] = None
     is_recurring: Optional[bool] = None
     recurring_frequency: Optional[RecurringFrequencyEnum] = None
+    notes: Optional[str] = None
+    receipt_url: Optional[str] = Field(None, max_length=500)
 
     @field_validator('amount')
     @classmethod
@@ -333,6 +337,8 @@ class TransactionResponse(BaseModel):
     recurring_frequency: Optional[RecurringFrequencyEnum] = None
     recurring_parent_id: Optional[UUID] = None
     is_generated: bool = False
+    notes: Optional[str] = None
+    receipt_url: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
 
@@ -497,3 +503,188 @@ class WeeklyTransactionSummary(BaseModel):
     week_start: date
     week_end: date
     total: float
+
+
+# ==================== JOB SCHEMAS ====================
+
+class JobCreate(BaseModel):
+    job_name: str = Field(..., min_length=1, max_length=200)
+    employer: Optional[str] = Field(None, max_length=200)
+    hourly_rate: Decimal = Field(..., gt=0)
+    hours_per_week: Decimal = Field(..., gt=0, le=168)
+    job_type: Optional[JobTypeEnum] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+
+
+class JobUpdate(BaseModel):
+    job_name: Optional[str] = Field(None, min_length=1, max_length=200)
+    employer: Optional[str] = Field(None, max_length=200)
+    hourly_rate: Optional[Decimal] = Field(None, gt=0)
+    hours_per_week: Optional[Decimal] = Field(None, gt=0, le=168)
+    job_type: Optional[JobTypeEnum] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    is_active: Optional[bool] = None
+
+
+class JobResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    job_name: str
+    employer: Optional[str] = None
+    hourly_rate: Decimal
+    hours_per_week: Decimal
+    job_type: Optional[JobTypeEnum] = None
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    is_active: bool
+    created_at: datetime
+    monthly_income: Optional[float] = None  # computed: hourly_rate × hours_per_week × (52/12)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class JobTotalIncome(BaseModel):
+    total_monthly_income: float
+    jobs: List[JobResponse]
+
+
+# ==================== GOAL SCHEMAS ====================
+
+class GoalCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    target_amount: Decimal = Field(..., gt=0)
+    currency: str = Field("USD", max_length=3)
+    deadline: Optional[date] = None
+
+
+class GoalUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    target_amount: Optional[Decimal] = Field(None, gt=0)
+    saved_amount: Optional[Decimal] = Field(None, ge=0)
+    currency: Optional[str] = Field(None, max_length=3)
+    deadline: Optional[date] = None
+    is_active: Optional[bool] = None
+
+
+class GoalResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    name: str
+    target_amount: Decimal
+    saved_amount: Decimal
+    currency: str
+    deadline: Optional[date] = None
+    is_active: bool
+    created_at: datetime
+    progress_pct: Optional[float] = None  # computed: saved_amount / target_amount * 100
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class GoalFundRequest(BaseModel):
+    amount: Decimal = Field(..., gt=0, description="Amount to add toward this goal")
+
+
+class NetSavingsResponse(BaseModel):
+    net_savings: float
+    month_income: float
+    month_expenses: float
+
+
+# ==================== NOTIFICATION PREFERENCES SCHEMA ====================
+
+class NotificationPreferencesUpdate(BaseModel):
+    sound_enabled: Optional[bool] = None
+    budget_alerts: Optional[bool] = None
+
+
+# ==================== LOAN PROJECTION SCHEMA ====================
+
+class LoanMonthPoint(BaseModel):
+    month_number: int
+    year: int
+    month: int
+    remaining_balance: float
+
+
+class LoanProjectionResponse(BaseModel):
+    total_loan_amount: float
+    monthly_payment: float
+    months_remaining: int
+    payoff_date: Optional[date]
+    monthly_schedule: List[LoanMonthPoint]
+
+
+# ==================== RECEIPT UPLOAD RESPONSE ====================
+
+class ReceiptUploadResponse(BaseModel):
+    receipt_url: str
+    suggested_category: Optional[str] = None
+
+
+# ==================== JOB HOURS LOG SCHEMAS ====================
+
+class JobHoursCreate(BaseModel):
+    week_start_date: date
+    hours_worked: Decimal = Field(..., gt=0, le=168)
+
+
+class JobHoursResponse(BaseModel):
+    id: UUID
+    job_id: UUID
+    week_start_date: date
+    hours_worked: Decimal
+    created_at: datetime
+    weekly_pay: Optional[float] = None  # computed: hours_worked × job.hourly_rate
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class JobMonthlySalary(BaseModel):
+    total_monthly_earned: float
+    jobs: List[dict]  # [{job_id, job_name, hours_this_month, monthly_earned}]
+
+
+# ==================== FAQ SUBMISSION SCHEMAS ====================
+
+class FAQSubmissionCreate(BaseModel):
+    question: str = Field(..., min_length=5, max_length=1000)
+    category: Optional[str] = Field(None, max_length=100)
+
+
+class FAQSubmissionReview(BaseModel):
+    status: str = Field(..., pattern="^(approved|rejected)$")
+    answer: Optional[str] = None
+
+
+class FAQSubmissionResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    question: str
+    answer: Optional[str] = None
+    category: Optional[str] = None
+    status: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== CHAT SCHEMAS ====================
+
+class ChatMessage(BaseModel):
+    role: str = Field(..., pattern="^(user|assistant)$")
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=4000)
+    history: List[ChatMessage] = []
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    action: Optional[dict] = None  # e.g. {"action": "add_transaction", "amount": 45, ...}
+    suggested_amount: Optional[float] = None
+    suggested_description: Optional[str] = None

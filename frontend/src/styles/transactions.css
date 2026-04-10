@@ -1,0 +1,315 @@
+/* Transactions */
+
+.transactions-page {
+  padding: 32px 36px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.transactions-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.transactions-title {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+}
+
+/* ── Filter bar ── */
+.transactions-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.transactions-filter-select {
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 227, 180, 0.04);
+  color: var(--text-secondary);
+  font-size: 0.83em;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.transactions-filter-btn {
+  padding: 7px 13px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.83em;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+
+.transactions-filter-btn.active {
+  background: var(--accent);
+  color: var(--teal-900, #071e1c);
+  border-color: transparent;
+  font-weight: 700;
+}
+
+[data-theme="light"] .transactions-filter-btn.active {
+  background: var(--teal-600);
+  color: #fff;
+}
+
+.transactions-export-btn {
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.83em;
+  cursor: pointer;
+  font-weight: 500;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.transactions-export-btn:hover {
+  border-color: var(--border-focus);
+  color: var(--accent);
+  transform: none;
+  box-shadow: none;
+}
+
+.transactions-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px;
+  background: var(--accent);
+  color: var(--teal-900, #071e1c);
+  border: none;
+  border-radius: 9px;
+  font-size: 0.875em;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+[data-theme="light"] .transactions-add-btn {
+  background: var(--teal-600);
+  color: #fff;
+}
+
+/* ── Forecast panel ── */
+.transactions-forecast-panel {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 20px;
+  overflow: hidden;
+}
+
+.transactions-forecast-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 16px;
+  cursor: pointer;
+  background: rgba(255, 227, 180, 0.03);
+  user-select: none;
+  list-style: none;
+  font-size: 0.875em;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.transactions-forecast-summary::-webkit-details-marker { display: none; }
+
+.transactions-forecast-body {
+  padding: 16px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Scenario slide-out ── */
+.transactions-scenario-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 400;
+}
+
+.transactions-scenario-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 400px;
+  max-width: 95vw;
+  height: 100vh;
+  background: var(--bg-card);
+  border-left: 1px solid var(--border);
+  padding: 24px;
+  overflow-y: auto;
+  z-index: 401;
+  transform: translateX(100%);
+  transition: transform 0.28s ease;
+}
+
+.transactions-scenario-panel.open {
+  transform: translateX(0);
+}
+
+/* ── Table ── */
+.transactions-table-wrap { overflow-x: auto; }
+
+.transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875em;
+}
+
+.transactions-table th {
+  text-align: left;
+  padding: 9px 12px;
+  font-size: 0.7em;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  border-bottom: 1px solid var(--border);
+  opacity: 0.6;
+}
+
+.transactions-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.transactions-table tr:hover td {
+  background: rgba(255, 227, 180, 0.02);
+}
+
+/* ── Modal ── */
+.transactions-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 20px;
+}
+
+.transactions-modal {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 28px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+.transactions-modal-title {
+  font-size: 1.15em;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 20px;
+  letter-spacing: -0.2px;
+}
+
+.transactions-form-label {
+  display: block;
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
+  opacity: 0.7;
+}
+
+.transactions-form-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 227, 180, 0.04);
+  color: var(--text-primary);
+  font-size: 0.875em;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.transactions-form-input:focus { border-color: var(--border-focus); }
+
+.transactions-form-row { display: flex; gap: 12px; }
+
+.transactions-modal-btn-row {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+.transactions-submit-btn {
+  padding: 10px 24px;
+  background: var(--accent);
+  color: var(--teal-900, #071e1c);
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.875em;
+  cursor: pointer;
+}
+
+[data-theme="light"] .transactions-submit-btn {
+  background: var(--teal-600);
+  color: #fff;
+}
+
+.transactions-submit-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.transactions-cancel-btn {
+  padding: 10px 18px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 0.875em;
+  cursor: pointer;
+}
+
+/* ── Toast ── */
+.transactions-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 11px 22px;
+  border-radius: 9px;
+  font-size: 0.875em;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  white-space: nowrap;
+}
+
+.transactions-toast.ok    { background: #134e2e; border: 1px solid #2dd4bf; color: #2dd4bf; }
+.transactions-toast.error { background: #3d1010; border: 1px solid #f87171; color: #f87171; }
+
+/* ── Empty state ── */
+.transactions-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}

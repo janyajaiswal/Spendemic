@@ -1,22 +1,16 @@
 /**
  * Budgets page — set monthly/weekly spending limits per category,
  * track live spend vs limit with colour-coded progress bars.
+ * Also hosts the Goals tab for savings targets.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import '../styles/budgets.css';
 
 const API = 'http://localhost:8000/api/v1';
 
 type Period = 'MONTHLY' | 'WEEKLY';
 
-const CATEGORY_EMOJI: Record<string, string> = {
-  FOOD: '🍔', RENT: '🏠', TRANSPORT: '🚌', UTILITIES: '💡',
-  HEALTHCARE: '🏥', EDUCATION: '📚', ENTERTAINMENT: '🎮',
-  CLOTHING: '👗', PERSONAL_CARE: '💄', SAVINGS: '💰',
-  INVESTMENT: '📈', SALARY: '💼', FREELANCE: '🖥️',
-  SCHOLARSHIP: '🎓', FAMILY_SUPPORT: '👨‍👩‍👧', CALFRESH: '🌾',
-  WORK_STUDY: '🏫', SIDE_HUSTLE: '⚡', OTHER: '📦',
-};
 
 const CATEGORIES = [
   'FOOD','RENT','TRANSPORT','UTILITIES','HEALTHCARE','EDUCATION',
@@ -57,11 +51,33 @@ const EMPTY_FORM: FormState = {
 
 const CURRENCIES = ['USD','EUR','GBP','INR','CAD','AUD','JPY','CNY','SGD','MXN','BRL','NGN','KES','PKR','BDT','PHP','VND'];
 
+interface Goal {
+  id: string;
+  name: string;
+  target_amount: string;
+  saved_amount: string;
+  currency: string;
+  deadline: string | null;
+  progress_pct: number;
+}
+
+interface GoalForm {
+  name: string;
+  target_amount: string;
+  currency: string;
+  deadline: string;
+}
+
+const EMPTY_GOAL_FORM: GoalForm = { name: '', target_amount: '', currency: 'USD', deadline: '' };
+
 export default function Budgets() {
   const { user } = useAuth();
   const token = user?.accessToken ?? localStorage.getItem('spendemic_token') ?? '';
   const authHdr = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
+  const [activeTab, setActiveTab] = useState<'budgets' | 'goals'>('budgets');
+
+  // Budget state
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -70,6 +86,17 @@ export default function Budgets() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // Goals state
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [goalsLoading, setGoalsLoading] = useState(false);
+  const [netSavings, setNetSavings] = useState<number | null>(null);
+  const [showGoalModal, setShowGoalModal] = useState(false);
+  const [goalForm, setGoalForm] = useState<GoalForm>(EMPTY_GOAL_FORM);
+  const [goalSaving, setGoalSaving] = useState(false);
+  const [goalError, setGoalError] = useState('');
+  const [fundGoalId, setFundGoalId] = useState<string | null>(null);
+  const [fundAmount, setFundAmount] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -81,7 +108,22 @@ export default function Budgets() {
     }
   }, [token]);
 
+  const loadGoals = useCallback(async () => {
+    setGoalsLoading(true);
+    try {
+      const [gr, sr] = await Promise.all([
+        fetch(`${API}/goals`, { headers: authHdr }),
+        fetch(`${API}/goals/net-savings`, { headers: authHdr }),
+      ]);
+      if (gr.ok) setGoals(await gr.json());
+      if (sr.ok) { const d = await sr.json(); setNetSavings(d.net_savings); }
+    } finally {
+      setGoalsLoading(false);
+    }
+  }, [token]);
+
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { if (activeTab === 'goals') loadGoals(); }, [activeTab, loadGoals]);
 
   const openAdd = () => { setForm(EMPTY_FORM); setEditId(null); setFormError(''); setShowModal(true); };
 
@@ -124,6 +166,29 @@ export default function Budgets() {
     setDeletingId(null); load();
   };
 
+  const handleSaveGoal = async () => {
+    if (!goalForm.name || !goalForm.target_amount) { setGoalError('Name and target amount required'); return; }
+    setGoalSaving(true); setGoalError('');
+    const payload = { name: goalForm.name, target_amount: parseFloat(goalForm.target_amount), currency: goalForm.currency, deadline: goalForm.deadline || null };
+    const res = await fetch(`${API}/goals`, { method: 'POST', headers: authHdr, body: JSON.stringify(payload) });
+    if (!res.ok) { const d = await res.json(); setGoalError(d.detail || 'Failed'); setGoalSaving(false); return; }
+    setShowGoalModal(false); setGoalForm(EMPTY_GOAL_FORM); loadGoals();
+    setGoalSaving(false);
+  };
+
+  const handleFundGoal = async (goalId: string) => {
+    if (!fundAmount || parseFloat(fundAmount) <= 0) return;
+    const res = await fetch(`${API}/goals/${goalId}/fund`, { method: 'POST', headers: authHdr, body: JSON.stringify({ amount: parseFloat(fundAmount) }) });
+    if (res.ok) { setFundGoalId(null); setFundAmount(''); loadGoals(); }
+    else { const d = await res.json(); alert(d.detail || 'Could not fund goal'); }
+  };
+
+  const handleDeleteGoal = async (id: string) => {
+    if (!confirm('Archive this goal?')) return;
+    await fetch(`${API}/goals/${id}`, { method: 'DELETE', headers: authHdr });
+    loadGoals();
+  };
+
   const barColor = (u: number) => {
     if (u >= 1) return '#f87171';       // over budget — red
     if (u >= 0.8) return '#fbbf24';     // 80%+ — amber
@@ -139,13 +204,152 @@ export default function Budgets() {
       {/* Header */}
       <div style={s.header}>
         <div>
-          <h1 style={s.title}>Budgets</h1>
-          <p style={s.subtitle}>Set spending limits · track what you've used</p>
+          <h1 style={s.title}>Budgets & Goals</h1>
+          <p style={s.subtitle}>Set spending limits · save toward goals</p>
         </div>
-        <button style={s.addBtn} onClick={openAdd}>+ New Budget</button>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          {activeTab === 'budgets' && (
+            <button style={{ ...s.addBtn, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'var(--brand-rose)' }}
+              onClick={() => {
+                const url = `${API}/budgets/export`;
+                fetch(url, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } })
+                  .then(r => r.blob()).then(blob => {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = 'budgets.csv';
+                    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                  });
+              }}>↓ Export CSV</button>
+          )}
+          {activeTab === 'budgets'
+            ? <button style={s.addBtn} onClick={openAdd}>+ New Budget</button>
+            : <button style={s.addBtn} onClick={() => { setShowGoalModal(true); setGoalError(''); setGoalForm(EMPTY_GOAL_FORM); }}>+ New Goal</button>
+          }
+        </div>
       </div>
 
-      {/* Summary strip */}
+      {/* Tabs */}
+      <div style={s.tabs}>
+        {(['budgets', 'goals'] as const).map(tab => (
+          <button key={tab} style={{ ...s.tab, ...(activeTab === tab ? s.tabActive : {}) }}
+            onClick={() => setActiveTab(tab)}>
+            {tab === 'budgets' ? 'Budgets' : 'Goals'}
+          </button>
+        ))}
+      </div>
+
+      {/* Goals tab */}
+      {activeTab === 'goals' && (
+        <div>
+          {netSavings !== null && (
+            <div style={{ ...s.strip, gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '20px' }}>
+              <div style={s.stripCard}>
+                <span style={s.stripLabel}>This Month Net Savings</span>
+                <span style={{ ...s.stripValue, color: netSavings >= 0 ? '#4ade80' : '#f87171' }}>
+                  ${netSavings.toFixed(2)}
+                </span>
+              </div>
+              <div style={s.stripCard}>
+                <span style={s.stripLabel}>Available to Fund Goals</span>
+                <span style={{ ...s.stripValue, color: netSavings > 0 ? '#4ade80' : '#888' }}>
+                  {netSavings > 0 ? `$${netSavings.toFixed(2)}` : 'No surplus this month'}
+                </span>
+              </div>
+            </div>
+          )}
+          {goalsLoading ? <p style={s.empty}>Loading goals…</p> : goals.length === 0 ? (
+            <div style={s.emptyState}>
+              <p style={s.emptyIcon}>🎯</p>
+              <p style={s.emptyTitle}>No goals yet</p>
+              <p style={s.emptyHint}>Create a savings goal for a car, travel fund, or emergency savings.</p>
+            </div>
+          ) : (
+            <div style={s.grid}>
+              {goals.map(g => (
+                <div key={g.id} style={s.card}>
+                  <div style={s.cardTop}>
+                    <span style={s.cardEmoji}>🎯</span>
+                    <div style={s.cardMeta}>
+                      <span style={s.cardCat}>{g.name}</span>
+                      {g.deadline && <span style={s.cardPeriod}>by {g.deadline}</span>}
+                    </div>
+                    <button style={s.iconBtn} onClick={() => handleDeleteGoal(g.id)}>🗑️</button>
+                  </div>
+                  <div style={s.barTrack}>
+                    <div style={{ ...s.barFill, width: `${Math.min(g.progress_pct, 100)}%`, background: g.progress_pct >= 100 ? '#4ade80' : 'var(--brand-gold)' }} />
+                  </div>
+                  <div style={s.cardNums}>
+                    <span style={{ color: 'var(--brand-gold)' }}>{g.currency} {parseFloat(g.saved_amount).toFixed(2)} saved</span>
+                    <span style={s.cardLimit}>of {g.currency} {parseFloat(g.target_amount).toFixed(2)}</span>
+                  </div>
+                  {fundGoalId === g.id ? (
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="number" min="0.01" step="0.01" placeholder="Amount"
+                        value={fundAmount} onChange={e => setFundAmount(e.target.value)}
+                        style={{ ...s.input, flex: 1 }}
+                      />
+                      <button style={s.saveBtn} onClick={() => handleFundGoal(g.id)}>Add</button>
+                      <button style={s.cancelBtn} onClick={() => setFundGoalId(null)}>✕</button>
+                    </div>
+                  ) : (
+                    <button
+                      style={{ ...s.addBtn, opacity: (netSavings ?? 0) <= 0 ? 0.4 : 1, cursor: (netSavings ?? 0) <= 0 ? 'not-allowed' : 'pointer' }}
+                      disabled={(netSavings ?? 0) <= 0}
+                      title={(netSavings ?? 0) <= 0 ? 'No net savings available this month' : 'Add funds toward this goal'}
+                      onClick={() => { setFundGoalId(g.id); setFundAmount(''); }}
+                    >
+                      + Add Funds
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {showGoalModal && (
+            <div style={s.overlay} onClick={() => setShowGoalModal(false)}>
+              <div style={s.modal} onClick={e => e.stopPropagation()}>
+                <h2 style={s.modalTitle}>New Goal</h2>
+                <div style={s.formGroup}>
+                  <label style={s.label}>Goal name *</label>
+                  <input style={s.input} placeholder="e.g. Emergency Fund" value={goalForm.name}
+                    onChange={e => setGoalForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div style={s.row}>
+                  <div style={{ ...s.formGroup, flex: 1 }}>
+                    <label style={s.label}>Target amount *</label>
+                    <input style={s.input} type="number" min="1" placeholder="1000" value={goalForm.target_amount}
+                      onChange={e => setGoalForm(f => ({ ...f, target_amount: e.target.value }))} />
+                  </div>
+                  <div style={{ ...s.formGroup, width: '90px' }}>
+                    <label style={s.label}>Currency</label>
+                    <select style={s.input} value={goalForm.currency}
+                      onChange={e => setGoalForm(f => ({ ...f, currency: e.target.value }))}>
+                      {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div style={s.formGroup}>
+                  <label style={s.label}>Deadline (optional)</label>
+                  <input style={s.input} type="date" value={goalForm.deadline}
+                    onChange={e => setGoalForm(f => ({ ...f, deadline: e.target.value }))} />
+                </div>
+                {goalError && <p style={s.error}>{goalError}</p>}
+                <div style={s.modalBtns}>
+                  <button style={s.cancelBtn} onClick={() => setShowGoalModal(false)}>Cancel</button>
+                  <button style={s.saveBtn} onClick={handleSaveGoal} disabled={goalSaving}>
+                    {goalSaving ? 'Saving…' : 'Create Goal'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Budgets tab */}
+      {activeTab === 'budgets' && (<>
       <div style={s.strip}>
         <div style={s.stripCard}>
           <span style={s.stripLabel}>Total Limit</span>
@@ -178,7 +382,7 @@ export default function Budgets() {
         <p style={s.empty}>Loading budgets…</p>
       ) : budgets.length === 0 ? (
         <div style={s.emptyState}>
-          <p style={s.emptyIcon}>💼</p>
+          <p style={s.emptyIcon}></p>
           <p style={s.emptyTitle}>No budgets yet</p>
           <p style={s.emptyHint}>Set a limit for a spending category to start tracking.</p>
           <button style={s.addBtn} onClick={openAdd}>Create your first budget</button>
@@ -194,7 +398,6 @@ export default function Budgets() {
             return (
               <div key={b.id} style={s.card}>
                 <div style={s.cardTop}>
-                  <span style={s.cardEmoji}>{CATEGORY_EMOJI[b.category] ?? '📦'}</span>
                   <div style={s.cardMeta}>
                     <span style={s.cardCat}>{CAT_LABEL[b.category] ?? b.category}</span>
                     <span style={s.cardPeriod}>{b.period}</span>
@@ -248,7 +451,7 @@ export default function Budgets() {
               <select style={s.input} value={form.category}
                 onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
                 {CATEGORIES.map(c => (
-                  <option key={c} value={c}>{CATEGORY_EMOJI[c]} {CAT_LABEL[c]}</option>
+                  <option key={c} value={c}>{CAT_LABEL[c]}</option>
                 ))}
               </select>
             </div>
@@ -275,7 +478,7 @@ export default function Budgets() {
                 {(['MONTHLY', 'WEEKLY'] as Period[]).map(p => (
                   <button key={p} style={{ ...s.toggleBtn, ...(form.period === p ? s.toggleActive : {}) }}
                     onClick={() => setForm(f => ({ ...f, period: p }))}>
-                    {p === 'MONTHLY' ? '📅 Monthly' : '📆 Weekly'}
+                    {p === 'MONTHLY' ? 'Monthly' : 'Weekly'}
                   </button>
                 ))}
               </div>
@@ -298,12 +501,16 @@ export default function Budgets() {
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 }
 
 const s: Record<string, React.CSSProperties> = {
   page: { padding: '32px', maxWidth: '1100px', margin: '0 auto' },
+  tabs: { display: 'flex', gap: '8px', marginBottom: '24px' },
+  tab: { padding: '8px 20px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', color: 'var(--brand-rose)', cursor: 'pointer', fontSize: '0.9em' },
+  tabActive: { background: 'rgba(255,215,0,0.15)', border: '1px solid var(--brand-gold)', color: 'var(--brand-gold)', fontWeight: 600 },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' },
   title: { fontSize: '1.8em', fontWeight: 700, color: 'var(--brand-gold)', margin: 0 },
   subtitle: { fontSize: '0.9em', color: 'var(--brand-rose)', opacity: 0.6, margin: '4px 0 0' },

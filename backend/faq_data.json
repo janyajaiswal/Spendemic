@@ -1,0 +1,98 @@
+[
+  {
+    "id": "visa-1",
+    "section": "Visa & Work",
+    "question": "How many hours can I work on campus as an F-1 student?",
+    "answer": "F-1 students may work up to 20 hours per week on campus during the academic term. During official school breaks (summer and winter), full-time on-campus work (more than 20 hours) is permitted if you plan to enroll in the next term."
+  },
+  {
+    "id": "visa-2",
+    "section": "Visa & Work",
+    "question": "What is the difference between CPT and OPT?",
+    "answer": "Curricular Practical Training (CPT) allows off-campus work that is an integral part of your curriculum, typically for internships or co-ops. Optional Practical Training (OPT) allows work in your field of study for up to 12 months after graduation (or 36 months for STEM degrees). CPT must be authorized by your DSO before you start; OPT requires a USCIS application."
+  },
+  {
+    "id": "visa-3",
+    "section": "Visa & Work",
+    "question": "Can I work off-campus during my first year on F-1?",
+    "answer": "Generally no. Off-campus employment during the first academic year is not permitted except under severe economic hardship, which requires USCIS authorization. After completing one academic year, CPT and OPT become available."
+  },
+  {
+    "id": "visa-4",
+    "section": "Visa & Work",
+    "question": "What happens if I work more than 20 hours during the semester?",
+    "answer": "Working more than 20 hours per week on campus during the academic term violates your F-1 status. This can result in the termination of your SEVIS record and potential deportation. Keep careful records of your work hours."
+  },
+  {
+    "id": "banking-1",
+    "section": "Banking",
+    "question": "Can I open a bank account without a Social Security Number?",
+    "answer": "Yes. Several banks and credit unions allow international students to open accounts with a passport, I-20 or DS-2019, and an ITIN or a letter from your university. Banks commonly used by international students include Chase, Bank of America, and credit unions affiliated with your university. Some online banks like Wise (formerly TransferWise) also support non-SSN account holders."
+  },
+  {
+    "id": "banking-2",
+    "section": "Banking",
+    "question": "How do I build credit history as an international student?",
+    "answer": "Start with a secured credit card, which requires a cash deposit as collateral. Use it for small recurring purchases and pay the balance in full each month. After 6–12 months of on-time payments, you can apply for an unsecured card. Some banks offer starter cards specifically for students without credit history."
+  },
+  {
+    "id": "banking-3",
+    "section": "Banking",
+    "question": "What is the cheapest way to send money home?",
+    "answer": "Wise (formerly TransferWise) and Remitly typically offer the lowest fees and best exchange rates for international transfers. Avoid using your bank's international wire service, which usually charges $25–$45 per transfer plus a poor exchange rate. Always compare the mid-market rate on Google with what your transfer service offers."
+  },
+  {
+    "id": "tax-1",
+    "section": "Taxes",
+    "question": "Do I need to file a US tax return as an international student?",
+    "answer": "Yes, if you were in the US at any point during the tax year you are generally required to file. Even if you had no income, F-1 and J-1 students must file Form 8843. If you earned income (wages, stipend, scholarship), you also need to file Form 1040-NR or 1040-NR-EZ."
+  },
+  {
+    "id": "tax-2",
+    "section": "Taxes",
+    "question": "When is the tax filing deadline?",
+    "answer": "April 15 each year for most filers. If you are a nonresident alien (which most F-1 students are for the first 5 years), your deadline is also April 15 for Form 1040-NR. Form 8843 alone (no income) must be filed by June 15."
+  },
+  {
+    "id": "tax-3",
+    "section": "Taxes",
+    "question": "Are scholarships taxable?",
+    "answer": "Scholarship amounts used for tuition and required fees are generally not taxable. However, amounts used for room, board, travel, or optional expenses are taxable. Stipends for research or teaching assistantships are also typically taxable as wages."
+  },
+  {
+    "id": "tax-4",
+    "section": "Taxes",
+    "question": "What software can I use to file taxes as an international student?",
+    "answer": "Sprintax is the most widely used tax preparation software for nonresident aliens. Many universities provide discounted or free Sprintax licenses — check with your international student office. TurboTax and TaxAct do NOT support Form 1040-NR and should not be used by nonresident students."
+  },
+  {
+    "id": "finance-1",
+    "section": "Financial Planning",
+    "question": "How much should I budget for groceries each month?",
+    "answer": "On average, international students in US cities spend $200–$400/month on groceries. Cooking at home, shopping at discount stores like Aldi or Trader Joe's, and buying in bulk significantly reduces this. Campus food banks and meal swipe programs are also available at many universities."
+  },
+  {
+    "id": "finance-2",
+    "section": "Financial Planning",
+    "question": "What is the 50/30/20 rule and does it apply to students?",
+    "answer": "The 50/30/20 rule suggests allocating 50% of income to needs (rent, food, utilities), 30% to wants (entertainment, dining out), and 20% to savings. For international students with irregular income, a modified version — covering needs first, saving any surplus — is more practical during the academic term."
+  },
+  {
+    "id": "finance-3",
+    "section": "Financial Planning",
+    "question": "How do I plan for tuition payments?",
+    "answer": "Tuition is typically due at the start of each semester. Divide the semester tuition by 5–6 months and set that amount aside monthly. Set a reminder 4–6 weeks before the due date. Check if your university offers a payment plan that spreads the tuition over the semester to avoid large lump-sum payments."
+  },
+  {
+    "id": "campus-1",
+    "section": "Campus Life",
+    "question": "What free resources are available on campus for international students?",
+    "answer": "Most universities offer free counseling services, international student advising, career centers, writing centers, food pantries, and legal aid clinics. Check your university's international student office website for a complete list. Student health insurance is often subsidized or included in tuition fees."
+  },
+  {
+    "id": "campus-2",
+    "section": "Campus Life",
+    "question": "What is tipping culture in the US and how much should I tip?",
+    "answer": "Tipping is customary in the US for restaurant servers (15–20%), delivery drivers ($3–5), rideshare drivers (10–15%), and hair stylists (15–20%). At sit-down restaurants, not tipping is considered rude as servers depend on tips for income. Fast food and self-serve cafes typically do not require a tip."
+  }
+]

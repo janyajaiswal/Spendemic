@@ -2,7 +2,11 @@
 AI Financial Planner - User Management API Endpoints
 CRUD operations for user management
 """
+import json
+import math
 import uuid as uuid_lib
+from datetime import date
+from dateutil.relativedelta import relativedelta
 from typing import List, Optional
 from uuid import UUID
 from pathlib import Path
@@ -13,7 +17,7 @@ from sqlalchemy.exc import IntegrityError
 
 from database import get_db
 from models import User
-from schemas import UserCreate, UserUpdate, UserResponse
+from schemas import UserCreate, UserUpdate, UserResponse, NotificationPreferencesUpdate, LoanProjectionResponse, LoanMonthPoint
 from routers.auth import get_current_user
 
 UPLOADS_DIR = Path(__file__).parent.parent / "uploads" / "avatars"
@@ -79,6 +83,66 @@ async def upload_avatar(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@router.patch("/me/notification-preferences", response_model=UserResponse, summary="Update notification preferences")
+async def update_notification_preferences(
+    body: NotificationPreferencesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    existing: dict = {}
+    if current_user.notification_preferences:
+        try:
+            existing = json.loads(current_user.notification_preferences)
+        except (json.JSONDecodeError, TypeError):
+            existing = {}
+    updates = body.model_dump(exclude_unset=True)
+    existing.update(updates)
+    current_user.notification_preferences = json.dumps(existing)
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
+@router.get("/me/loan-projection", response_model=LoanProjectionResponse, summary="Loan repayment projection")
+async def loan_projection(
+    current_user: User = Depends(get_current_user),
+) -> LoanProjectionResponse:
+    if not current_user.total_loan_amount or not current_user.monthly_loan_payment:
+        raise HTTPException(
+            status_code=400,
+            detail="Set total_loan_amount and monthly_loan_payment in your profile first."
+        )
+    total = float(current_user.total_loan_amount)
+    payment = float(current_user.monthly_loan_payment)
+    if payment <= 0:
+        raise HTTPException(status_code=400, detail="Monthly loan payment must be greater than 0.")
+
+    start = current_user.loan_start_date or date.today()
+    months_remaining = math.ceil(total / payment)
+    payoff_date = start + relativedelta(months=months_remaining)
+
+    schedule: list[LoanMonthPoint] = []
+    balance = total
+    cursor = start
+    for i in range(1, months_remaining + 1):
+        balance = max(0.0, balance - payment)
+        schedule.append(LoanMonthPoint(
+            month_number=i,
+            year=cursor.year,
+            month=cursor.month,
+            remaining_balance=round(balance, 2),
+        ))
+        cursor = cursor + relativedelta(months=1)
+
+    return LoanProjectionResponse(
+        total_loan_amount=total,
+        monthly_payment=payment,
+        months_remaining=months_remaining,
+        payoff_date=payoff_date,
+        monthly_schedule=schedule,
+    )
 
 
 # ==================== CREATE USER ====================

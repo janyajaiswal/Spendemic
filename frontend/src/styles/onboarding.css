@@ -1,0 +1,205 @@
+/* Onboarding */
+
+.onboarding-root {
+  min-height: 100vh;
+  background: var(--bg-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.onboarding-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 48px 40px 40px;
+  width: 100%;
+  max-width: 520px;
+  position: relative;
+  overflow: hidden;
+}
+
+.onboarding-progress-dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 36px;
+}
+
+.onboarding-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 227, 180, 0.15);
+  transition: background 0.3s, transform 0.3s;
+}
+
+.onboarding-dot.active {
+  background: var(--accent);
+  transform: scale(1.3);
+}
+
+[data-theme="light"] .onboarding-dot.active {
+  background: var(--teal-600);
+}
+
+.onboarding-dot.done {
+  background: rgba(255, 227, 180, 0.35);
+}
+
+[data-theme="light"] .onboarding-dot.done {
+  background: rgba(14, 76, 73, 0.3);
+}
+
+.onboarding-slide {
+  animation: slideIn 0.35s ease;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.onboarding-slide-back {
+  animation: slideInBack 0.35s ease;
+}
+
+@keyframes slideInBack {
+  from { opacity: 0; transform: translateX(-30px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+.onboarding-step-label {
+  font-size: 0.72em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 8px;
+  opacity: 0.6;
+}
+
+.onboarding-title {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.3px;
+  margin-bottom: 8px;
+}
+
+.onboarding-subtitle {
+  font-size: 0.875em;
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+  line-height: 1.55;
+  opacity: 0.7;
+}
+
+.onboarding-field {
+  margin-bottom: 20px;
+}
+
+.onboarding-field label {
+  display: block;
+  font-size: 0.72em;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  opacity: 0.65;
+}
+
+.onboarding-field input,
+.onboarding-field select {
+  width: 100%;
+  background: rgba(255, 227, 180, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  padding: 10px 14px;
+  font-size: 0.875em;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s;
+  box-sizing: border-box;
+}
+
+.onboarding-field input:focus,
+.onboarding-field select:focus {
+  border-color: var(--border-focus);
+}
+
+.onboarding-field .field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.onboarding-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 32px;
+  gap: 12px;
+}
+
+.onboarding-btn-back {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875em;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.onboarding-btn-back:hover {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.onboarding-btn-next {
+  background: var(--accent);
+  border: none;
+  color: var(--teal-900, #071e1c);
+  padding: 10px 28px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875em;
+  font-weight: 700;
+  font-family: inherit;
+  transition: opacity 0.15s;
+}
+
+[data-theme="light"] .onboarding-btn-next {
+  background: var(--teal-600);
+  color: #fff;
+}
+
+.onboarding-btn-next:hover { opacity: 0.85; }
+
+.onboarding-btn-skip {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.83em;
+  cursor: pointer;
+  padding: 10px 0;
+  font-family: inherit;
+  opacity: 0.6;
+}
+
+.onboarding-btn-skip:hover { opacity: 1; }
+
+.onboarding-done-icon {
+  text-align: center;
+  margin-bottom: 16px;
+  color: var(--accent);
+}
+
+[data-theme="light"] .onboarding-done-icon {
+  color: var(--teal-600);
+}

@@ -2,8 +2,9 @@
  * Reports — Chronos-2 spending forecast with confidence bands + historical breakdown.
  */
 import { useState, useEffect, useCallback } from 'react';
+import '../styles/reports.css';
 import {
-  ComposedChart, Bar, Area, Line,
+  ComposedChart, Bar, Area, Line, LineChart,
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine,
 } from 'recharts';
@@ -35,6 +36,8 @@ interface HistoryPoint  { year: number; month?: number; week?: number; total: nu
 interface Prediction    { year: number; month?: number; week?: number; month_offset?: number; week_offset?: number; lower: number; median: number; upper: number }
 interface ForecastResp  { history: HistoryPoint[]; predictions: Prediction[]; prediction_months?: number; prediction_weeks?: number; granularity: string; graduation_date: string | null; warnings: string[] }
 interface WeeklySummaryRow { year: number; week: number; week_start: string; week_end: string; total: number }
+interface LoanMonthPoint { month: number; year: number; remaining: number }
+interface LoanProjection { months_remaining: number; payoff_date: string; monthly_schedule: LoanMonthPoint[] }
 
 interface ChartPoint {
   label: string;
@@ -53,18 +56,18 @@ function ForecastTooltip({ active, payload, label }: any) {
   const d = payload[0]?.payload as ChartPoint;
   return (
     <div style={{
-      background: '#1a0505', border: '1px solid #7a0000',
+      background: '#0d3533', border: '1px solid rgba(255,227,180,0.15)',
       borderRadius: 8, padding: '10px 14px', fontSize: 13,
     }}>
-      <div style={{ color: '#FFD700', fontWeight: 700, marginBottom: 6 }}>{label}</div>
+      <div style={{ color: '#ffe3b4', fontWeight: 700, marginBottom: 6 }}>{label}</div>
       {d.actual != null && (
-        <div style={{ color: '#FFE4E1' }}>Actual: <b>{usd(d.actual)}</b></div>
+        <div style={{ color: '#ecc7b0' }}>Actual: <b>{usd(d.actual)}</b></div>
       )}
       {d.median != null && (
         <>
-          <div style={{ color: '#FFD700' }}>Forecast: <b>{usd(d.median)}</b></div>
+          <div style={{ color: '#ffe3b4' }}>Forecast: <b>{usd(d.median)}</b></div>
           {d.lower != null && d.bandWidth != null && (
-            <div style={{ color: '#aaa', fontSize: 11 }}>
+            <div style={{ color: 'rgba(236,199,176,0.55)', fontSize: 11 }}>
               Range: {usd(d.lower)} – {usd(d.lower + d.bandWidth)}
             </div>
           )}
@@ -80,8 +83,8 @@ function ForecastTooltip({ active, payload, label }: any) {
 function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
     <div style={{
-      background: 'rgba(26, 5, 5, 0.8)',
-      border: '1px solid #7a0000',
+      background: 'var(--bg-card)',
+      border: '1px solid var(--border)',
       borderRadius: 12,
       padding: '20px 24px',
       ...style,
@@ -104,6 +107,7 @@ export default function Reports() {
   const [predWeeks, setPredWeeks]           = useState(8);
   const [loading, setLoading]               = useState(false);
   const [error, setError]                   = useState<string | null>(null);
+  const [loanProjection, setLoanProjection] = useState<LoanProjection | null>(null);
 
   const headers: HeadersInit = { Authorization: `Bearer ${user?.accessToken ?? ''}` };
 
@@ -146,6 +150,11 @@ export default function Reports() {
       fetchForecast();
       fetchGradForecast();
       if (granularity === 'weekly') fetchWeeklySummary();
+      // Load loan projection once
+      fetch(`${API}/users/me/loan-projection`, { headers })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d && d.months_remaining > 0) setLoanProjection(d); })
+        .catch(() => {});
     }
   }, [granularity, predMonths, predWeeks, fetchForecast, fetchGradForecast, fetchWeeklySummary]);
 
@@ -192,33 +201,32 @@ export default function Reports() {
   // Render
   // ─────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '28px 32px', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '32px 36px', maxWidth: 1100, margin: '0 auto' }}>
 
       {/* ── Header ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <TrendingUp size={28} color="#FFD700" />
-        <div>
-          <h2 style={{ color: '#FFE4E1', margin: 0 }}>Spending Reports & Forecast</h2>
-          <p style={{ color: '#aaa', fontSize: 13, margin: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28, flexWrap: 'wrap' }}>
+        <TrendingUp size={24} color="var(--accent)" />
+        <div style={{ flex: 1 }}>
+          <h2 style={{ color: 'var(--text-primary)', margin: 0, fontSize: '1.5em', fontWeight: 700, letterSpacing: '-0.3px' }}>Spending Reports & Forecast</h2>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.8em', margin: 0, opacity: 0.65 }}>
             Powered by Amazon Chronos-2 · historical actuals + probabilistic predictions
           </p>
         </div>
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
-          {/* Weekly / Monthly toggle */}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {(['weekly', 'monthly'] as const).map(g => (
             <button key={g} onClick={() => setGranularity(g)} style={{
-              padding: '5px 14px', fontSize: 13, borderRadius: 4,
-              background: granularity === g ? '#FFD700' : 'transparent',
-              color:      granularity === g ? '#550000' : '#FFE4E1',
-              border:     granularity === g ? 'none' : '1px solid #7a0000',
-              fontWeight: granularity === g ? 700 : 400, cursor: 'pointer',
+              padding: '7px 14px', fontSize: '0.83em', borderRadius: 8, fontFamily: 'inherit',
+              background: granularity === g ? 'var(--accent)' : 'transparent',
+              color:      granularity === g ? 'var(--teal-900)' : 'var(--text-secondary)',
+              border:     granularity === g ? 'none' : '1px solid var(--border)',
+              fontWeight: granularity === g ? 700 : 500, cursor: 'pointer',
             }}>
               {g === 'weekly' ? 'Weekly' : 'Monthly'}
             </button>
           ))}
           <button
             onClick={() => fetchForecast()}
-            style={{ background: 'transparent', border: '1px solid #7a0000', color: '#FFE4E1', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}
+            style={{ background: 'transparent', border: '1px solid var(--border)', color: 'var(--text-secondary)', padding: '7px 12px', display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.83em', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}
           >
             <RefreshCw size={14} /> Refresh
           </button>
@@ -229,8 +237,8 @@ export default function Reports() {
       {forecast?.warnings?.map((w, i) => (
         <div key={i} style={{
           display: 'flex', alignItems: 'flex-start', gap: 10,
-          background: 'rgba(251, 191, 36, 0.1)', border: '1px solid #fbbf24',
-          borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#fbbf24',
+          background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)',
+          borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.83em', color: '#f59e0b',
         }}>
           <AlertTriangle size={15} style={{ marginTop: 1, flexShrink: 0 }} />
           {w}
@@ -240,8 +248,8 @@ export default function Reports() {
       {/* ── Error ── */}
       {error && (
         <div style={{
-          background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444',
-          borderRadius: 8, padding: '10px 14px', color: '#f87171', marginBottom: 16, fontSize: 13,
+          background: 'rgba(248,113,113,0.08)', border: '1px solid rgba(248,113,113,0.3)',
+          borderRadius: 8, padding: '10px 14px', color: '#f87171', marginBottom: 16, fontSize: '0.83em',
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
           <AlertTriangle size={15} />
@@ -251,24 +259,24 @@ export default function Reports() {
 
       {/* ── Summary cards ── */}
       {forecast && !loading && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginBottom: 24 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14, marginBottom: 24 }}>
           <Card>
-            <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>
-              TOTAL PROJECTED ({granularity === 'weekly' ? `${predWeeks}wk` : `${predMonths}mo`})
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6, opacity: 0.6 }}>
+              Total Projected ({granularity === 'weekly' ? `${predWeeks}wk` : `${predMonths}mo`})
             </div>
-            <div style={{ color: '#FFD700', fontSize: 24, fontWeight: 700 }}>{usd(totalProjected)}</div>
+            <div style={{ color: 'var(--text-primary)', fontSize: '1.55em', fontWeight: 700, letterSpacing: '-0.4px' }}>{usd(totalProjected)}</div>
           </Card>
           <Card>
-            <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>
-              {granularity === 'weekly' ? 'AVG / WEEK' : 'AVG / MONTH'}
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6, opacity: 0.6 }}>
+              {granularity === 'weekly' ? 'Avg / Week' : 'Avg / Month'}
             </div>
-            <div style={{ color: '#FFD700', fontSize: 24, fontWeight: 700 }}>{usd(avgProjected)}</div>
+            <div style={{ color: 'var(--text-primary)', fontSize: '1.55em', fontWeight: 700, letterSpacing: '-0.4px' }}>{usd(avgProjected)}</div>
           </Card>
           <Card>
-            <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>
-              {granularity === 'weekly' ? 'PEAK FORECAST WEEK' : 'PEAK FORECAST MONTH'}
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 6, opacity: 0.6 }}>
+              {granularity === 'weekly' ? 'Peak Forecast Week' : 'Peak Forecast Month'}
             </div>
-            <div style={{ color: '#FFD700', fontSize: 24, fontWeight: 700 }}>
+            <div style={{ color: 'var(--text-primary)', fontSize: '1.55em', fontWeight: 700, letterSpacing: '-0.4px' }}>
               {peakPeriod
                 ? (granularity === 'weekly' && peakPeriod.week != null
                     ? weekLabel(peakPeriod.year, peakPeriod.week)
@@ -276,40 +284,66 @@ export default function Reports() {
                 : '—'}
             </div>
             {peakPeriod && (
-              <div style={{ color: '#FFE4E1', fontSize: 12 }}>{usd(peakPeriod.median)}</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.83em', opacity: 0.6 }}>{usd(peakPeriod.median)}</div>
             )}
           </Card>
         </div>
       )}
 
+      {/* ── Data gate: require ≥ 14 days of history ── */}
+      {!loading && !error && (() => {
+        const historyPoints = forecast?.history?.filter(h => !h.synthetic).length ?? 0;
+        const daysEstimate = granularity === 'weekly' ? historyPoints * 7 : historyPoints * 30;
+        if (daysEstimate < 14 && historyPoints < 2) {
+          const daysNeeded = 14;
+          const pct = Math.min(100, Math.round((daysEstimate / daysNeeded) * 100));
+          return (
+            <Card style={{ marginBottom: 24, textAlign: 'center' }}>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '1em', marginBottom: 8 }}>
+                Add at least 2 weeks of transactions to unlock AI forecasting
+              </div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.83em', marginBottom: 16, opacity: 0.65 }}>
+                Chronos-2 needs enough history to detect spending patterns. Keep logging transactions!
+              </div>
+              <div style={{ background: 'rgba(255,227,180,0.08)', borderRadius: 99, height: 6, overflow: 'hidden', maxWidth: 320, margin: '0 auto 8px' }}>
+                <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent)', borderRadius: 99, transition: 'width 0.4s ease' }} />
+              </div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.75em' }}>{pct}% of data needed</div>
+            </Card>
+          );
+        }
+        return null;
+      })()}
+
       {/* ── Main Forecast Chart ── */}
       <Card style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20, gap: 12, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ color: '#FFE4E1', fontWeight: 600, fontSize: 15 }}>
+            <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em' }}>
               {granularity === 'weekly' ? 'Weekly' : 'Monthly'} Spending — History & Forecast
             </div>
-            <div style={{ color: '#888', fontSize: 12, marginTop: 2 }}>
-              Gray bars = actual · Gold line = forecast median · Shaded band = confidence interval
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', marginTop: 2, opacity: 0.6 }}>
+              Gray bars = actual · Cream line = forecast median · Shaded band = confidence interval
             </div>
           </div>
-          {/* Period selector */}
-          <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {granularity === 'weekly'
               ? [4, 8, 12, 26].map(w => (
                   <button key={w} onClick={() => setPredWeeks(w)} style={{
-                    padding: '5px 12px', fontSize: 13,
-                    background: predWeeks === w ? '#FFD700' : 'transparent',
-                    color:      predWeeks === w ? '#550000' : '#FFE4E1',
-                    border:     predWeeks === w ? 'none' : '1px solid #7a0000',
+                    padding: '5px 12px', fontSize: '0.8em', borderRadius: 7, fontFamily: 'inherit', cursor: 'pointer',
+                    background: predWeeks === w ? 'var(--accent)' : 'transparent',
+                    color:      predWeeks === w ? 'var(--teal-900)' : 'var(--text-secondary)',
+                    border:     predWeeks === w ? 'none' : '1px solid var(--border)',
+                    fontWeight: predWeeks === w ? 700 : 500,
                   }}>{w}wk</button>
                 ))
               : [3, 6, 12].map(m => (
                   <button key={m} onClick={() => setPredMonths(m)} style={{
-                    padding: '5px 14px', fontSize: 13,
-                    background: predMonths === m ? '#FFD700' : 'transparent',
-                    color:      predMonths === m ? '#550000' : '#FFE4E1',
-                    border:     predMonths === m ? 'none' : '1px solid #7a0000',
+                    padding: '5px 14px', fontSize: '0.8em', borderRadius: 7, fontFamily: 'inherit', cursor: 'pointer',
+                    background: predMonths === m ? 'var(--accent)' : 'transparent',
+                    color:      predMonths === m ? 'var(--teal-900)' : 'var(--text-secondary)',
+                    border:     predMonths === m ? 'none' : '1px solid var(--border)',
+                    fontWeight: predMonths === m ? 700 : 500,
                   }}>{m}mo</button>
                 ))
             }
@@ -317,12 +351,12 @@ export default function Reports() {
         </div>
 
         {loading ? (
-          <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+          <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '0.875em' }}>
             Loading forecast…
           </div>
         ) : chartData.length === 0 ? (
           <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ textAlign: 'center', color: '#888' }}>
+            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.875em' }}>
               <Info size={32} style={{ marginBottom: 8 }} />
               <div>No data yet. Import transactions to generate a forecast.</div>
             </div>
@@ -330,15 +364,15 @@ export default function Reports() {
         ) : (
           <ResponsiveContainer width="100%" height={320}>
             <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,227,180,0.06)" />
               <XAxis
                 dataKey="label"
-                tick={{ fill: '#aaa', fontSize: 11 }}
-                axisLine={{ stroke: '#7a0000' }}
+                tick={{ fill: 'rgba(236,199,176,0.5)', fontSize: 11 }}
+                axisLine={{ stroke: 'rgba(255,227,180,0.1)' }}
                 tickLine={false}
               />
               <YAxis
-                tick={{ fill: '#aaa', fontSize: 11 }}
+                tick={{ fill: 'rgba(236,199,176,0.5)', fontSize: 11 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={v => `$${(v / 1000).toFixed(1)}k`}
@@ -346,20 +380,17 @@ export default function Reports() {
               />
               <Tooltip content={<ForecastTooltip />} />
 
-              {/* Reference line marking start of forecast */}
               {boundaryLabel && (
                 <ReferenceLine
                   x={boundaryLabel}
-                  stroke="#7a0000"
+                  stroke="rgba(255,227,180,0.2)"
                   strokeDasharray="4 3"
-                  label={{ value: 'Forecast →', fill: '#888', fontSize: 11, position: 'insideTopRight' }}
+                  label={{ value: 'Forecast →', fill: 'rgba(236,199,176,0.45)', fontSize: 11, position: 'insideTopRight' }}
                 />
               )}
 
-              {/* Historical bars */}
               <Bar dataKey="actual" name="Actual" fill="#9ca3af" radius={[3,3,0,0]} maxBarSize={40} />
 
-              {/* Confidence band — stacked areas: transparent base (lower) + visible band (upper-lower) */}
               <Area
                 dataKey="lower"
                 stackId="band"
@@ -373,19 +404,18 @@ export default function Reports() {
                 stackId="band"
                 name="Confidence band"
                 stroke="none"
-                fill="#FFD700"
-                fillOpacity={0.15}
+                fill="#ffe3b4"
+                fillOpacity={0.12}
                 activeDot={false}
               />
 
-              {/* Forecast median line */}
               <Line
                 dataKey="median"
                 name="Forecast median"
-                stroke="#FFD700"
+                stroke="#ffe3b4"
                 strokeWidth={2.5}
                 strokeDasharray="6 3"
-                dot={{ r: 4, fill: '#FFD700', stroke: '#550000', strokeWidth: 2 }}
+                dot={{ r: 4, fill: '#ffe3b4', stroke: '#0d3533', strokeWidth: 2 }}
                 activeDot={{ r: 6 }}
                 connectNulls
               />
@@ -396,22 +426,22 @@ export default function Reports() {
 
       {/* ── Graduation Forecast Card ── */}
       {gradForecast && gradMonths > 0 && (
-        <Card style={{ marginBottom: 24, borderColor: '#DAA520' }}>
+        <Card style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <GraduationCap size={28} color="#FFD700" />
+            <GraduationCap size={24} color="var(--accent)" />
             <div style={{ flex: 1 }}>
-              <div style={{ color: '#FFE4E1', fontWeight: 600, fontSize: 15 }}>Graduation Forecast</div>
-              <div style={{ color: '#888', fontSize: 12 }}>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em' }}>Graduation Forecast</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', opacity: 0.6 }}>
                 Through {gradForecast.graduation_date} · {gradMonths} month{gradMonths !== 1 ? 's' : ''} remaining
               </div>
             </div>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ color: '#FFD700', fontSize: 28, fontWeight: 700 }}>{usd(gradTotal)}</div>
-              <div style={{ color: '#aaa', fontSize: 12 }}>total projected spend</div>
+              <div style={{ color: 'var(--text-primary)', fontSize: '1.55em', fontWeight: 700, letterSpacing: '-0.4px' }}>{usd(gradTotal)}</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', opacity: 0.55 }}>total projected spend</div>
             </div>
           </div>
           {gradForecast.warnings?.length > 0 && (
-            <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(251,191,36,0.08)', borderRadius: 6, color: '#fbbf24', fontSize: 12 }}>
+            <div style={{ marginTop: 12, padding: '8px 12px', background: 'rgba(245,158,11,0.08)', borderRadius: 6, color: '#f59e0b', fontSize: '0.78em' }}>
               {gradForecast.warnings[0]}
             </div>
           )}
@@ -421,18 +451,18 @@ export default function Reports() {
       {/* ── Historical table (weekly or monthly) ── */}
       {granularity === 'weekly' && weeklySummary && weeklySummary.length > 0 && (
         <Card>
-          <div style={{ color: '#FFE4E1', fontWeight: 600, fontSize: 15, marginBottom: 16 }}>
+          <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em', marginBottom: 16 }}>
             Weekly Spending History
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875em' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #7a0000' }}>
-                  <th style={{ textAlign: 'left', padding: '8px 12px', color: '#888', fontWeight: 500 }}>Week</th>
-                  <th style={{ textAlign: 'left', padding: '8px 12px', color: '#888', fontWeight: 500 }}>Dates</th>
-                  <th style={{ textAlign: 'right', padding: '8px 12px', color: '#888', fontWeight: 500 }}>Total Spent</th>
-                  <th style={{ textAlign: 'right', padding: '8px 12px', color: '#888', fontWeight: 500 }}>vs. Avg</th>
-                  <th style={{ padding: '8px 12px' }}></th>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.75em', textTransform: 'uppercase', letterSpacing: '0.5px', opacity: 0.6 }}>Week</th>
+                  <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.75em', textTransform: 'uppercase', letterSpacing: '0.5px', opacity: 0.6 }}>Dates</th>
+                  <th style={{ textAlign: 'right', padding: '8px 10px', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.75em', textTransform: 'uppercase', letterSpacing: '0.5px', opacity: 0.6 }}>Total Spent</th>
+                  <th style={{ textAlign: 'right', padding: '8px 10px', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.75em', textTransform: 'uppercase', letterSpacing: '0.5px', opacity: 0.6 }}>vs. Avg</th>
+                  <th style={{ padding: '8px 10px' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -444,20 +474,20 @@ export default function Reports() {
                     const barW = Math.min(Math.abs(w.total / maxT) * 100, 100);
                     const fmtDate = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                     return (
-                      <tr key={i} style={{ borderBottom: '1px solid rgba(122,0,0,0.3)' }}>
-                        <td style={{ padding: '10px 12px', color: '#FFE4E1' }}>{weekLabel(w.year, w.week)}</td>
-                        <td style={{ padding: '10px 12px', color: '#aaa', fontSize: 12 }}>
+                      <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '9px 10px', color: 'var(--text-primary)' }}>{weekLabel(w.year, w.week)}</td>
+                        <td style={{ padding: '9px 10px', color: 'var(--text-secondary)', fontSize: '0.83em', opacity: 0.6 }}>
                           {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', color: '#FFD700', fontWeight: 600 }}>{usd(w.total)}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 12 }}>
-                          <span style={{ color: pct > 0 ? '#f87171' : '#4ade80' }}>
+                        <td style={{ padding: '9px 10px', textAlign: 'right', color: 'var(--text-primary)', fontWeight: 600 }}>{usd(w.total)}</td>
+                        <td style={{ padding: '9px 10px', textAlign: 'right', fontSize: '0.8em' }}>
+                          <span style={{ color: pct > 0 ? '#f87171' : '#2dd4bf' }}>
                             {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
                           </span>
                         </td>
-                        <td style={{ padding: '10px 12px', width: 120 }}>
-                          <div style={{ height: 6, background: '#2d0a0a', borderRadius: 3 }}>
-                            <div style={{ height: '100%', width: `${barW}%`, background: '#FFD700', borderRadius: 3, opacity: 0.7 }} />
+                        <td style={{ padding: '9px 10px', width: 100 }}>
+                          <div style={{ height: 5, background: 'rgba(255,227,180,0.08)', borderRadius: 99 }}>
+                            <div style={{ height: '100%', width: `${barW}%`, background: 'var(--accent)', borderRadius: 99, opacity: 0.6 }} />
                           </div>
                         </td>
                       </tr>
@@ -470,19 +500,46 @@ export default function Reports() {
         </Card>
       )}
 
+      {/* ── Loan Repayment Chart ── */}
+      {loanProjection && loanProjection.monthly_schedule.length > 0 && (
+        <Card style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+            <div>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em' }}>Loan Repayment Projection</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', marginTop: 2, opacity: 0.6 }}>
+                {loanProjection.months_remaining} months remaining · paid off by {loanProjection.payoff_date}
+              </div>
+            </div>
+          </div>
+          <ResponsiveContainer width="100%" height={200}>
+            <LineChart data={loanProjection.monthly_schedule.map(p => ({
+              label: `${MONTH_NAMES[(p.month - 1) % 12]} '${String(p.year).slice(2)}`,
+              remaining: p.remaining,
+            }))} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,227,180,0.06)" />
+              <XAxis dataKey="label" tick={{ fill: 'rgba(236,199,176,0.5)', fontSize: 10 }} tickLine={false} interval={Math.floor(loanProjection.monthly_schedule.length / 6)} />
+              <YAxis tick={{ fill: 'rgba(236,199,176,0.5)', fontSize: 10 }} tickLine={false} axisLine={false} tickFormatter={v => `$${(v/1000).toFixed(0)}k`} width={48} />
+              <Tooltip formatter={(v) => [`$${Number(v).toLocaleString('en-US', { maximumFractionDigits: 0 })}`, 'Remaining']}
+                contentStyle={{ background: '#0d3533', border: '1px solid rgba(255,227,180,0.1)', borderRadius: 8, fontSize: 12 }} />
+              <Line dataKey="remaining" stroke="#f87171" strokeWidth={2} dot={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        </Card>
+      )}
+
       {granularity === 'monthly' && forecast && forecast.history.length > 0 && (
         <Card>
-          <div style={{ color: '#FFE4E1', fontWeight: 600, fontSize: 15, marginBottom: 16 }}>
+          <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em', marginBottom: 16 }}>
             Historical Monthly Spend
           </div>
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875em' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #7a0000' }}>
-                  <th style={{ textAlign: 'left', padding: '8px 12px', color: '#888', fontWeight: 500 }}>Month</th>
-                  <th style={{ textAlign: 'right', padding: '8px 12px', color: '#888', fontWeight: 500 }}>Total Spent</th>
-                  <th style={{ textAlign: 'right', padding: '8px 12px', color: '#888', fontWeight: 500 }}>vs. Avg</th>
-                  <th style={{ padding: '8px 12px' }}></th>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  <th style={{ textAlign: 'left', padding: '8px 10px', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.75em', textTransform: 'uppercase', letterSpacing: '0.5px', opacity: 0.6 }}>Month</th>
+                  <th style={{ textAlign: 'right', padding: '8px 10px', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.75em', textTransform: 'uppercase', letterSpacing: '0.5px', opacity: 0.6 }}>Total Spent</th>
+                  <th style={{ textAlign: 'right', padding: '8px 10px', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.75em', textTransform: 'uppercase', letterSpacing: '0.5px', opacity: 0.6 }}>vs. Avg</th>
+                  <th style={{ padding: '8px 10px' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -492,20 +549,20 @@ export default function Reports() {
                     const pct = avg > 0 ? ((h.total - avg) / avg) * 100 : 0;
                     const barW = Math.min(Math.abs(h.total / Math.max(...forecast.history.map(x => x.total))) * 100, 100);
                     return (
-                      <tr key={i} style={{ borderBottom: '1px solid rgba(122,0,0,0.3)' }}>
-                        <td style={{ padding: '10px 12px', color: '#FFE4E1' }}>
+                      <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '9px 10px', color: 'var(--text-primary)' }}>
                           {monthLabel(h.year, h.month ?? 1)}
-                          {h.synthetic && <span style={{ color: '#888', fontSize: 11, marginLeft: 6 }}>(estimated)</span>}
+                          {h.synthetic && <span style={{ color: 'var(--text-muted)', fontSize: '0.78em', marginLeft: 6 }}>(estimated)</span>}
                         </td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', color: '#FFD700', fontWeight: 600 }}>{usd(h.total)}</td>
-                        <td style={{ padding: '10px 12px', textAlign: 'right', fontSize: 12 }}>
-                          <span style={{ color: pct > 0 ? '#f87171' : '#4ade80' }}>
+                        <td style={{ padding: '9px 10px', textAlign: 'right', color: 'var(--text-primary)', fontWeight: 600 }}>{usd(h.total)}</td>
+                        <td style={{ padding: '9px 10px', textAlign: 'right', fontSize: '0.8em' }}>
+                          <span style={{ color: pct > 0 ? '#f87171' : '#2dd4bf' }}>
                             {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
                           </span>
                         </td>
-                        <td style={{ padding: '10px 12px', width: 120 }}>
-                          <div style={{ height: 6, background: '#2d0a0a', borderRadius: 3 }}>
-                            <div style={{ height: '100%', width: `${barW}%`, background: '#FFD700', borderRadius: 3, opacity: 0.7 }} />
+                        <td style={{ padding: '9px 10px', width: 100 }}>
+                          <div style={{ height: 5, background: 'rgba(255,227,180,0.08)', borderRadius: 99 }}>
+                            <div style={{ height: '100%', width: `${barW}%`, background: 'var(--accent)', borderRadius: 99, opacity: 0.6 }} />
                           </div>
                         </td>
                       </tr>

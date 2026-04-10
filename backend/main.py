@@ -20,6 +20,10 @@ from routers import alerts
 from routers import forecast_context
 from routers import forecast
 from routers import import_transactions
+from routers import jobs
+from routers import goals
+from routers import faq
+from routers import chat
 
 # ---------------------------------------------------------------------------
 # Load the Chronos-2 model once at startup (background thread so the server
@@ -76,6 +80,10 @@ app.include_router(alerts.router)
 app.include_router(forecast_context.router)
 app.include_router(forecast.router)
 app.include_router(import_transactions.router)
+app.include_router(jobs.router)
+app.include_router(goals.router)
+app.include_router(faq.router)
+app.include_router(chat.router)
 
 # Serve uploaded files (avatars, etc.)
 _uploads_dir = Path(__file__).parent / "uploads"

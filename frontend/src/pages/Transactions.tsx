@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import '../styles/transactions.css';
 import {
   Plus, Pencil, Trash2, TrendingUp, TrendingDown, X, Check,
-  ChevronDown, FlaskConical, ChevronRight, Upload,
+  ChevronDown, FlaskConical, Upload,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -48,6 +49,8 @@ interface Transaction {
   type: TxType;
   category: Category;
   description: string | null;
+  notes: string | null;
+  receipt_url: string | null;
   transaction_date: string;
   is_recurring: boolean;
   recurring_frequency: RecurFreq | null;
@@ -62,6 +65,7 @@ interface FormState {
   type: TxType;
   category: Category;
   description: string;
+  notes: string;
   transaction_date: string;
   is_recurring: boolean;
   recurring_frequency: RecurFreq;
@@ -84,12 +88,6 @@ const CAT_LABEL: Record<Category, string> = {
   SALARY: 'Salary', STIPEND: 'Stipend', SCHOLARSHIP: 'Scholarship', FINANCIAL_AID: 'Financial Aid',
   FAMILY_SUPPORT: 'Family Support', FREELANCE: 'Freelance', OTHER: 'Other',
 };
-const CAT_EMOJI: Record<Category, string> = {
-  HOUSING: '🏠', FOOD: '🍔', TRANSPORTATION: '🚌', EDUCATION: '📚', HEALTHCARE: '💊',
-  ENTERTAINMENT: '🎬', SHOPPING: '🛍️', UTILITIES: '💡', PERSONAL_CARE: '💈', TRAVEL: '✈️',
-  SAVINGS: '🏦', SALARY: '💼', STIPEND: '🎓', SCHOLARSHIP: '🏆', FINANCIAL_AID: '🤝',
-  FAMILY_SUPPORT: '👨‍👩‍👧', FREELANCE: '💻', OTHER: '📌',
-};
 const FREQ_LABEL: Record<RecurFreq, string> = {
   DAILY: 'Daily', WEEKLY: 'Weekly', BI_WEEKLY: 'Bi-weekly',
   MONTHLY: 'Monthly', QUARTERLY: 'Quarterly', ANNUALLY: 'Annually',
@@ -99,7 +97,7 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 
 const EMPTY_FORM: FormState = {
   amount: '', currency: 'USD', type: 'EXPENSE', category: 'FOOD',
-  description: '', transaction_date: new Date().toISOString().slice(0, 10),
+  description: '', notes: '', transaction_date: new Date().toISOString().slice(0, 10),
   is_recurring: false, recurring_frequency: 'MONTHLY',
 };
 
@@ -147,6 +145,8 @@ export default function Transactions() {
   const scenarioIdRef = useRef(0);
 
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
 
   // ── Forecast Setup state ─────────────────────────────────────────��──────────
   const [fcOpen, setFcOpen] = useState(false);
@@ -468,12 +468,14 @@ export default function Transactions() {
     setEditingId(tx.id);
     setForm({
       amount: tx.amount, currency: tx.currency, type: tx.type, category: tx.category,
-      description: tx.description ?? '', transaction_date: tx.transaction_date,
+      description: tx.description ?? '', notes: tx.notes ?? '',
+      transaction_date: tx.transaction_date,
       is_recurring: tx.is_recurring, recurring_frequency: tx.recurring_frequency ?? 'MONTHLY',
     });
+    setReceiptFile(null);
     setFormError(''); setModalOpen(true);
   };
-  const closeModal = () => { setModalOpen(false); setEditingId(null); };
+  const closeModal = () => { setModalOpen(false); setEditingId(null); setReceiptFile(null); };
 
   const handleTypeChange = (t: TxType) => {
     const cats = t === 'INCOME' ? INCOME_CATS : EXPENSE_CATS;
@@ -487,7 +489,29 @@ export default function Transactions() {
       const url = isEdit ? `${API}/transactions/${editingId}` : `${API}/transactions`;
       const res = await fetch(url, { method: isEdit ? 'PUT' : 'POST', headers: authHdr, body: JSON.stringify(payload) });
       if (!res.ok) { const e = await res.json() as { detail?: string }; throw new Error(e.detail ?? 'Failed'); }
-      showToast(isEdit ? 'Updated' : 'Transaction added', true);
+      const saved = await res.json() as { id: string };
+      const txId = isEdit ? editingId! : saved.id;
+
+      if (receiptFile) {
+        const fd = new FormData();
+        fd.append('file', receiptFile);
+        try {
+          const rr = await fetch(`${API}/transactions/${txId}/receipt`, {
+            method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd,
+          });
+          if (rr.ok) {
+            const rd = await rr.json() as { suggested_category?: string };
+            showToast(rd.suggested_category
+              ? `Receipt saved · Detected: ${rd.suggested_category} — check category`
+              : 'Receipt saved', true);
+          } else {
+            showToast(isEdit ? 'Updated (receipt upload failed)' : 'Transaction added (receipt upload failed)', true);
+          }
+        } catch { showToast(isEdit ? 'Updated' : 'Transaction added', true); }
+      } else {
+        showToast(isEdit ? 'Updated' : 'Transaction added', true);
+      }
+
       closeModal(); fetchTransactions();
     } catch (e: unknown) {
       setFormError(e instanceof Error ? e.message : 'Save failed');
@@ -502,6 +526,7 @@ export default function Transactions() {
     const payload = {
       amount: parseFloat(form.amount), currency: form.currency, type: form.type,
       category: form.category, description: form.description || null,
+      notes: form.notes || null,
       transaction_date: form.transaction_date, is_recurring: form.is_recurring,
       recurring_frequency: form.is_recurring ? form.recurring_frequency : null,
     };
@@ -653,6 +678,20 @@ export default function Transactions() {
           <p style={s.subtitle}>{MONTHS[filterMonth - 1]} {filterYear} · Working: <strong>{workingCurrency}</strong> · Home: <strong>{homeCurrency}</strong></p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
+          <button style={{ ...s.addBtn, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'var(--brand-rose)' }}
+            onClick={() => {
+              const url = `${API}/transactions/export?year=${filterYear}&month=${filterMonth}`;
+              const a = document.createElement('a');
+              a.href = url;
+              a.setAttribute('download', `transactions-${filterYear}-${filterMonth}.csv`);
+              a.setAttribute('x-auth-token', token);
+              fetch(url, { headers: authHdr }).then(r => r.blob()).then(blob => {
+                a.href = URL.createObjectURL(blob);
+                document.body.appendChild(a); a.click(); document.body.removeChild(a);
+              });
+            }}>
+            ↓ Export CSV
+          </button>
           <button style={{ ...s.addBtn, background: 'transparent', border: '1px solid var(--brand-gold)', color: 'var(--brand-gold)' }}
             onClick={() => setImportOpen(true)}>
             <Upload size={16} /> Import
@@ -706,6 +745,15 @@ export default function Transactions() {
             <ChevronDown size={13} style={s.chevron} />
           </div>
         </div>
+        <button
+          style={{ ...s.tab, borderColor: 'rgba(167,139,250,0.4)', color: '#a78bfa', display: 'flex', alignItems: 'center', gap: '6px' }}
+          onClick={() => setScenarioOpen(o => !o)}
+          title="What-If Scenario Planner"
+        >
+          <FlaskConical size={14} />
+          Scenarios
+          {scenarios.length > 0 && <span style={s.scenarioBadge}>{scenarios.length}</span>}
+        </button>
       </div>
 
       {/* Transaction List */}
@@ -714,7 +762,7 @@ export default function Transactions() {
           <div style={s.centered}><span style={{ color: 'var(--brand-rose)', opacity: 0.5 }}>Loading…</span></div>
         ) : displayedTransactions.length === 0 ? (
           <div style={s.empty}>
-            <div style={s.emptyIcon}>{filterType === 'RECURRING' ? '↻' : '📊'}</div>
+            <div style={s.emptyIcon}>{filterType === 'RECURRING' ? '↻' : ''}</div>
             <p style={s.emptyText}>
               {filterType === 'RECURRING'
                 ? 'No fixed/recurring expenses this period. Mark a transaction as recurring to see it here.'
@@ -744,7 +792,7 @@ export default function Transactions() {
                 const showHome = homeCurrency !== workingCurrency && tx.currency !== homeCurrency;
                 return (
                   <div key={tx.id} style={s.txRow}>
-                    <div style={s.txEmoji}>{CAT_EMOJI[tx.category]}</div>
+                    <div style={s.txCatDot} />
                     <div style={s.txMeta}>
                       <span style={s.txCategory}>{CAT_LABEL[tx.category]}</span>
                       {tx.description && <span style={s.txDesc}>{tx.description}</span>}
@@ -760,6 +808,10 @@ export default function Transactions() {
                         {tx.is_generated && <span style={s.genBadge}>auto</span>}
                         {showOrig && <span style={s.origBadge}>{tx.currency} {origAmt.toFixed(2)}</span>}
                         {showHome && <span style={s.homeBadge}>≈ {homeCurrency} {homeAmt.toFixed(2)}</span>}
+                        {tx.receipt_url && (
+                          <a href={tx.receipt_url} target="_blank" rel="noopener noreferrer" title="View receipt"
+                            style={{ fontSize: '0.75em', textDecoration: 'none', color: 'var(--accent)' }}>[receipt]</a>
+                        )}
                       </div>
                     </div>
                     <div style={s.txRight}>
@@ -781,17 +833,20 @@ export default function Transactions() {
         )}
       </div>
 
-      {/* ─── Scenario Planner ─── */}
-      <div style={s.scenarioSection}>
-        <button style={s.scenarioToggle} onClick={() => setScenarioOpen(o => !o)}>
-          <FlaskConical size={16} style={{ color: '#a78bfa' }} />
-          <span>What-If Scenario Planner</span>
-          {scenarios.length > 0 && <span style={s.scenarioBadge}>{scenarios.length}</span>}
-          <ChevronRight size={14} style={{ marginLeft: 'auto', transform: scenarioOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', opacity: 0.6 }} />
-        </button>
-
-        {scenarioOpen && (
-          <div style={s.scenarioBody}>
+      {/* ─── Scenario Planner slide-out ─── */}
+      {scenarioOpen && (
+        <div className="transactions-scenario-overlay" onClick={() => setScenarioOpen(false)} />
+      )}
+      <div className={`transactions-scenario-panel${scenarioOpen ? ' open' : ''}`}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: '#a78bfa', fontSize: '1em' }}>
+            <FlaskConical size={16} /> What-If Scenario Planner
+          </span>
+          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', padding: '4px' }} onClick={() => setScenarioOpen(false)}>
+            <X size={18} />
+          </button>
+        </div>
+        <div style={s.scenarioBody}>
             <p style={s.scenarioHint}>
               Simulate hypothetical transactions to see how they'd affect your balance — without saving them.
               Scenarios are never included in your actual data.
@@ -820,7 +875,7 @@ export default function Transactions() {
               const amt = convert(parseFloat(sc.amount), sc.currency, workingCurrency);
               return (
                 <div key={sc.scenarioId} style={s.scenarioRow}>
-                  <span style={s.scenarioRowEmoji}>{CAT_EMOJI[sc.category]}</span>
+                  <div style={s.txCatDot} />
                   <div style={s.scenarioRowMeta}>
                     <span style={s.scenarioRowLabel}>{sc.label}</span>
                     <span style={s.scenarioRowSub}>{CAT_LABEL[sc.category]}</span>
@@ -873,7 +928,7 @@ export default function Transactions() {
                   <select style={s.input} value={scenarioForm.category}
                     onChange={e => setScenarioForm(f => ({ ...f, category: e.target.value as Category }))}>
                     {(scenarioForm.type === 'INCOME' ? INCOME_CATS : EXPENSE_CATS).map(c => (
-                      <option key={c} value={c}>{CAT_EMOJI[c]} {CAT_LABEL[c]}</option>
+                      <option key={c} value={c}>{CAT_LABEL[c]}</option>
                     ))}
                   </select>
                 </div>
@@ -885,22 +940,19 @@ export default function Transactions() {
               </div>
             )}
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* ─── Forecast Setup ─── */}
-      <div style={s.fcSection}>
-        <button style={s.fcToggle} onClick={() => setFcOpen(o => !o)}>
-          <span>📅</span>
+      {/* ─── Forecast Setup (collapsible) ─── */}
+      <details style={s.fcSection} onToggle={(e) => setFcOpen((e.target as HTMLDetailsElement).open)}>
+        <summary style={s.fcToggle}>
+          <span style={{ fontSize: '0.75em', opacity: 0.5 }}>▸</span>
           <span>Forecast Setup</span>
           <span style={{ fontSize: '0.78em', opacity: 0.55, fontWeight: 400, marginLeft: '6px' }}>
             — tell Chronos-2 about upcoming expenses &amp; breaks
           </span>
-          <ChevronRight size={14} style={{ marginLeft: 'auto', transform: fcOpen ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', opacity: 0.5 }} />
-        </button>
+        </summary>
 
-        {fcOpen && (
-          <div style={s.fcBody}>
+        <div style={s.fcBody}>
             {/* Year picker */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
               <span style={s.fcLabel}>Year:</span>
@@ -1012,7 +1064,7 @@ export default function Transactions() {
                 </div>
                 {fcForm.travel_home && (
                   <div style={{ ...s.formGroup, gridColumn: '1 / -1' }}>
-                    <label style={s.label}>✈️ Flight + travel cost this month ($)</label>
+                    <label style={s.label}>Flight + travel cost this month ($)</label>
                     <input style={s.input} type="number" min="0" placeholder="e.g. 1400"
                       value={fcForm.travel_cost}
                       onChange={e => setFcForm(f => ({ ...f, travel_cost: e.target.value }))} />
@@ -1031,7 +1083,7 @@ export default function Transactions() {
                 {([
                   ['is_summer_break', 'Summer break (May–Aug)'],
                   ['is_winter_break', 'Winter break (Dec–Jan)'],
-                  ['travel_home', '✈️ Flying home this month'],
+                  ['travel_home', 'Flying home this month'],
                 ] as [keyof FcData, string][]).map(([key, label]) => (
                   <label key={key} style={s.checkRow}>
                     <input type="checkbox"
@@ -1109,8 +1161,7 @@ export default function Transactions() {
               </div>
             </div>
           </div>
-        )}
-      </div>
+      </details>
 
       {/* ─── Copy-to-months modal ─── */}
       {fcCopyOpen && (
@@ -1240,7 +1291,7 @@ export default function Transactions() {
                     <label style={s.label}>Default category when description can't be matched</label>
                     <select style={s.input} value={importDefCategory} onChange={e => setImportDefCategory(e.target.value)}>
                       {[...INCOME_CATS, ...EXPENSE_CATS].filter((v, i, a) => a.indexOf(v) === i).map(c => (
-                        <option key={c} value={c}>{CAT_EMOJI[c]} {CAT_LABEL[c]}</option>
+                        <option key={c} value={c}>{CAT_LABEL[c]}</option>
                       ))}
                     </select>
                   </div>
@@ -1292,7 +1343,6 @@ export default function Transactions() {
             {/* Step 3 — Done */}
             {importStep === 'done' && importResult && (
               <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                <div style={{ fontSize: '2.5em', marginBottom: '12px' }}>✅</div>
                 <p style={{ color: '#4ade80', fontWeight: 700, fontSize: '1.1em', margin: '0 0 6px' }}>
                   {importResult.imported} transaction{importResult.imported !== 1 ? 's' : ''} imported
                 </p>
@@ -1469,7 +1519,7 @@ export default function Transactions() {
               <div style={s.formGroup}>
                 <label style={s.label}>Category</label>
                 <select style={s.input} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value as Category }))}>
-                  {currentCats.map(c => <option key={c} value={c}>{CAT_EMOJI[c]} {CAT_LABEL[c]}</option>)}
+                  {currentCats.map(c => <option key={c} value={c}>{CAT_LABEL[c]}</option>)}
                 </select>
               </div>
 
@@ -1483,6 +1533,34 @@ export default function Transactions() {
                 <label style={s.label}>Description <span style={{ opacity: 0.4 }}>(optional)</span></label>
                 <input style={s.input} type="text" maxLength={500} placeholder="e.g. Grocery run" value={form.description}
                   onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
+              </div>
+
+              <div style={s.formGroup}>
+                <label style={s.label}>Notes <span style={{ opacity: 0.4 }}>(optional)</span></label>
+                <textarea style={{ ...s.input, resize: 'vertical', minHeight: '60px', fontFamily: 'inherit' }}
+                  placeholder="Any additional notes…" maxLength={1000} value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+              </div>
+
+              <div style={s.formGroup}>
+                <label style={s.label}>Receipt <span style={{ opacity: 0.4 }}>(optional, image up to 10 MB)</span></label>
+                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                  <button type="button" style={{ ...s.cancelBtn, fontSize: '0.85em', padding: '7px 14px' }}
+                    onClick={() => receiptInputRef.current?.click()}>
+                    {receiptFile ? receiptFile.name : 'Attach receipt'}
+                  </button>
+                  {receiptFile && (
+                    <button type="button" style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171', fontSize: '0.85em' }}
+                      onClick={() => setReceiptFile(null)}>✕ Remove</button>
+                  )}
+                </div>
+                <input ref={receiptInputRef} type="file" accept="image/jpeg,image/png,image/webp"
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    const f = e.target.files?.[0];
+                    if (f && f.size <= 10 * 1024 * 1024) setReceiptFile(f);
+                    else if (f) showToast('Image must be under 10 MB', false);
+                  }} />
               </div>
 
               <label style={s.checkRow}>
@@ -1545,6 +1623,7 @@ const s: Record<string, React.CSSProperties> = {
   list: { display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '24px' },
   txRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' },
   txEmoji: { fontSize: '1.4em', width: '34px', textAlign: 'center', flexShrink: 0 },
+  txCatDot: { width: '8px', height: '8px', borderRadius: '50%', background: 'var(--accent)', opacity: 0.5, flexShrink: 0, alignSelf: 'center' },
   txMeta: { display: 'flex', flexDirection: 'column', gap: '2px', flex: 1, minWidth: 0 },
   txCategory: { fontWeight: 600, color: 'var(--brand-rose)', fontSize: '0.93em' },
   txDesc: { fontSize: '0.78em', color: 'var(--brand-rose)', opacity: 0.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
