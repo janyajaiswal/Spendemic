@@ -27,24 +27,26 @@ function OnboardingGuard({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   return (
-    <div className="app-container">
-      <Sidebar />
-      <div className="main-content">
-        <ChatWidget />
-        <Routes>
-          <Route path="/" element={<Landing />} />
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/onboarding" element={<Onboarding />} />
-          <Route path="/dashboard" element={<OnboardingGuard><Dashboard /></OnboardingGuard>} />
-          <Route path="/budgets" element={<OnboardingGuard><Budgets /></OnboardingGuard>} />
-          <Route path="/expenses" element={<OnboardingGuard><Transactions /></OnboardingGuard>} />
-          <Route path="/transactions" element={<OnboardingGuard><Transactions /></OnboardingGuard>} />
-          <Route path="/reports" element={<OnboardingGuard><Reports /></OnboardingGuard>} />
-          <Route path="/settings" element={<OnboardingGuard><Settings /></OnboardingGuard>} />
-          <Route path="/faq" element={<FAQ />} />
-        </Routes>
+    <>
+      <div className="app-container">
+        <Sidebar />
+        <div className="main-content">
+          <Routes>
+            <Route path="/" element={<Landing />} />
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/onboarding" element={<Onboarding />} />
+            <Route path="/dashboard" element={<OnboardingGuard><Dashboard /></OnboardingGuard>} />
+            <Route path="/budgets" element={<OnboardingGuard><Budgets /></OnboardingGuard>} />
+            <Route path="/expenses" element={<OnboardingGuard><Transactions /></OnboardingGuard>} />
+            <Route path="/transactions" element={<OnboardingGuard><Transactions /></OnboardingGuard>} />
+            <Route path="/reports" element={<OnboardingGuard><Reports /></OnboardingGuard>} />
+            <Route path="/settings" element={<OnboardingGuard><Settings /></OnboardingGuard>} />
+            <Route path="/faq" element={<FAQ />} />
+          </Routes>
+        </div>
       </div>
-    </div>
+      <ChatWidget />
+    </>
   );
 }
 

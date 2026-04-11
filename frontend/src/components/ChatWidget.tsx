@@ -13,10 +13,17 @@ interface Message {
 
 interface ActionPayload {
   action: string;
+  // add_transaction
   amount?: number;
   type?: string;
   category?: string;
   description?: string;
+  // navigate
+  path?: string;
+  // create_goal
+  name?: string;
+  target_amount?: number;
+  deadline?: string | null;
 }
 
 interface PendingAction {
@@ -29,7 +36,10 @@ export default function ChatWidget() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: 'Hi! I\'m your Spendemic assistant. Ask me anything about budgeting, visa work rules, taxes, or just say "Add $45 food expense at Chipotle" to log a transaction.' },
+    {
+      role: 'assistant',
+      content: 'Hi! I\'m your Spendemic assistant. Ask me anything about budgeting, visa work rules, taxes, or just say "Add $45 food expense at Chipotle" to log a transaction.',
+    },
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,6 +53,10 @@ export default function ChatWidget() {
   if (!isAuthenticated) return null;
 
   const token = user?.accessToken;
+  const authHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${token}`,
+  };
 
   const send = async () => {
     const text = input.trim();
@@ -57,65 +71,109 @@ export default function ChatWidget() {
     try {
       const res = await fetch(`${API}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          message: text,
-          history: messages.slice(-10),
-        }),
+        headers: authHeaders,
+        body: JSON.stringify({ message: text, history: messages.slice(-10) }),
       });
 
-      if (!res.ok) throw new Error(`${res.status}`);
-      const data = await res.json() as { reply: string; action: ActionPayload | null };
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { detail?: string }).detail || `${res.status}`);
+      }
 
+      const data = await res.json() as { reply: string; action: ActionPayload | null };
       setMessages([...newHistory, { role: 'assistant', content: data.reply }]);
 
-      if (data.action?.action === 'add_transaction') {
-        const a = data.action;
-        const label = `${a.type === 'INCOME' ? 'Income' : 'Expense'} $${a.amount} — ${a.description} (${a.category})`;
-        setPendingAction({ payload: a, label });
+      if (data.action) {
+        handleAction(data.action);
       }
-
-      if (data.reply.toLowerCase().includes('go to') || data.reply.toLowerCase().includes('navigate to')) {
-        const pageMap: Record<string, string> = {
-          dashboard: '/dashboard', budgets: '/budgets', transactions: '/transactions',
-          expenses: '/transactions', reports: '/reports', settings: '/settings', faq: '/faq',
-        };
-        for (const [keyword, path] of Object.entries(pageMap)) {
-          if (data.reply.toLowerCase().includes(keyword)) {
-            navigate(path);
-            break;
-          }
-        }
-      }
-    } catch {
-      setMessages([...newHistory, { role: 'assistant', content: 'Sorry, I couldn\'t connect. Check that the backend is running.' }]);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setMessages([...newHistory, {
+        role: 'assistant',
+        content: msg.includes('503') || msg.includes('unavailable')
+          ? 'Chat is not configured yet. Ask the admin to set the API key.'
+          : `Sorry, something went wrong: ${msg}`,
+      }]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAction = (a: ActionPayload) => {
+    if (a.action === 'navigate' && a.path) {
+      navigate(a.path);
+      return;
+    }
+
+    if (a.action === 'add_transaction') {
+      const label = `${a.type === 'INCOME' ? 'Income' : 'Expense'} $${a.amount} — ${a.description} (${a.category})`;
+      setPendingAction({ payload: a, label });
+      return;
+    }
+
+    if (a.action === 'create_goal') {
+      const label = `Goal: "${a.name}" — save $${a.target_amount}${a.deadline ? ` by ${a.deadline}` : ''}`;
+      setPendingAction({ payload: a, label });
+      return;
     }
   };
 
   const confirmAction = async () => {
     if (!pendingAction) return;
     const a = pendingAction.payload;
+
     try {
-      await fetch(`${API}/transactions`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          amount: a.amount,
-          currency: 'USD',
-          type: a.type,
-          category: a.category,
-          description: a.description,
-          transaction_date: new Date().toISOString().split('T')[0],
-        }),
-      });
-      setMessages(prev => [...prev, { role: 'assistant', content: `Done! Transaction added: ${pendingAction.label}` }]);
+      if (a.action === 'add_transaction') {
+        await fetch(`${API}/transactions`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            amount: a.amount,
+            currency: 'USD',
+            type: a.type,
+            category: a.category,
+            description: a.description,
+            transaction_date: new Date().toISOString().split('T')[0],
+          }),
+        });
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Done! Added: ${pendingAction.label}`,
+        }]);
+      }
+
+      if (a.action === 'create_goal') {
+        const res = await fetch(`${API}/goals`, {
+          method: 'POST',
+          headers: authHeaders,
+          body: JSON.stringify({
+            name: a.name,
+            target_amount: a.target_amount,
+            currency: 'USD',
+            deadline: a.deadline || null,
+          }),
+        });
+        if (!res.ok) throw new Error('Goal creation failed');
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Done! Your goal "${a.name}" for $${a.target_amount} has been created. You can track it on the Budgets page.`,
+        }]);
+      }
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Couldn\'t add the transaction. Try adding it manually on the Transactions page.' }]);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Something went wrong. Try doing it manually from the app.',
+      }]);
     }
+
     setPendingAction(null);
   };
+
+  const pendingLabel = pendingAction?.payload.action === 'add_transaction'
+    ? 'Add this transaction?'
+    : pendingAction?.payload.action === 'create_goal'
+    ? 'Create this goal?'
+    : 'Confirm?';
 
   return (
     <>
@@ -135,11 +193,11 @@ export default function ChatWidget() {
             {loading && <div className="chat-msg loading">Thinking…</div>}
             {pendingAction && (
               <div className="chat-action-card">
-                <div className="chat-action-title">Add this transaction?</div>
+                <div className="chat-action-title">{pendingLabel}</div>
                 <div className="chat-action-detail">{pendingAction.label}</div>
                 <div className="chat-action-buttons">
-                  <button className="chat-action-btn confirm" onClick={confirmAction}>Yes, add it</button>
-                  <button className="chat-action-btn dismiss" onClick={() => setPendingAction(null)}>Dismiss</button>
+                  <button className="chat-action-btn confirm" onClick={confirmAction}>Yes</button>
+                  <button className="chat-action-btn dismiss" onClick={() => setPendingAction(null)}>Cancel</button>
                 </div>
               </div>
             )}

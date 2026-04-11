@@ -243,13 +243,13 @@ export default function Budgets() {
         <div>
           {netSavings !== null && (
             <div style={{ ...s.strip, gridTemplateColumns: 'repeat(2, 1fr)', marginBottom: '20px' }}>
-              <div style={s.stripCard}>
+              <div className="budgets-strip-card" style={s.stripCard}>
                 <span style={s.stripLabel}>This Month Net Savings</span>
                 <span style={{ ...s.stripValue, color: netSavings >= 0 ? '#4ade80' : '#f87171' }}>
                   ${netSavings.toFixed(2)}
                 </span>
               </div>
-              <div style={s.stripCard}>
+              <div className="budgets-strip-card" style={s.stripCard}>
                 <span style={s.stripLabel}>Available to Fund Goals</span>
                 <span style={{ ...s.stripValue, color: netSavings > 0 ? '#4ade80' : '#888' }}>
                   {netSavings > 0 ? `$${netSavings.toFixed(2)}` : 'No surplus this month'}
@@ -266,7 +266,7 @@ export default function Budgets() {
           ) : (
             <div style={s.grid}>
               {goals.map(g => (
-                <div key={g.id} style={s.card}>
+                <div key={g.id} className="budgets-inline-card" style={s.card}>
                   <div style={s.cardTop}>
                     <span style={s.cardEmoji}>🎯</span>
                     <div style={s.cardMeta}>
@@ -396,7 +396,7 @@ export default function Budgets() {
             const remaining = limit - spent;
             const color = barColor(b.utilization);
             return (
-              <div key={b.id} style={s.card}>
+              <div key={b.id} className="budgets-inline-card" style={s.card}>
                 <div style={s.cardTop}>
                   <div style={s.cardMeta}>
                     <span style={s.cardCat}>{CAT_LABEL[b.category] ?? b.category}</span>
@@ -507,7 +507,7 @@ export default function Budgets() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: '32px', maxWidth: '1100px', margin: '0 auto' },
+  page: { padding: '32px' },
   tabs: { display: 'flex', gap: '8px', marginBottom: '24px' },
   tab: { padding: '8px 20px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', color: 'var(--brand-rose)', cursor: 'pointer', fontSize: '0.9em' },
   tabActive: { background: 'rgba(255,215,0,0.15)', border: '1px solid var(--brand-gold)', color: 'var(--brand-gold)', fontWeight: 600 },
@@ -521,14 +521,12 @@ const s: Record<string, React.CSSProperties> = {
   },
   strip: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '28px' },
   stripCard: {
-    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
     borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px',
   },
-  stripLabel: { fontSize: '0.78em', color: 'var(--brand-rose)', opacity: 0.55, textTransform: 'uppercase', letterSpacing: '0.05em' },
-  stripValue: { fontSize: '1.4em', fontWeight: 700, color: 'var(--brand-gold)' },
+  stripLabel: { fontSize: '0.78em', color: 'var(--text-secondary)', opacity: 0.55, textTransform: 'uppercase', letterSpacing: '0.05em' },
+  stripValue: { fontSize: '1.4em', fontWeight: 700, color: 'var(--text-primary)' },
   grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '18px' },
   card: {
-    background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)',
     borderRadius: '14px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '12px',
   },
   cardTop: { display: 'flex', alignItems: 'center', gap: '12px' },
@@ -538,7 +536,7 @@ const s: Record<string, React.CSSProperties> = {
   cardPeriod: { fontSize: '0.72em', color: 'var(--brand-rose)', opacity: 0.45, textTransform: 'uppercase', letterSpacing: '0.06em' },
   cardActions: { display: 'flex', gap: '4px' },
   iconBtn: { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1em', padding: '4px', opacity: 0.7 },
-  barTrack: { height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' },
+  barTrack: { height: '8px', background: 'var(--border)', borderRadius: '4px', overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: '4px', transition: 'width 0.4s ease' },
   cardNums: { display: 'flex', justifyContent: 'space-between', fontSize: '0.85em', fontWeight: 600 },
   cardLimit: { color: 'var(--brand-rose)', opacity: 0.5 },

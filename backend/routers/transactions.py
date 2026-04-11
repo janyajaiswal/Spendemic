@@ -271,6 +271,51 @@ def get_weekly_summary(
     ]
 
 
+@router.get("/export", response_class=StreamingResponse)
+def export_transactions_csv(
+    year: Optional[int] = Query(None, ge=2000, le=2100),
+    month: Optional[int] = Query(None, ge=1, le=12),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Download transactions as a CSV file."""
+    q = db.query(Transaction).filter(Transaction.user_id == current_user.id)
+    if year:
+        q = q.filter(extract("year", Transaction.transaction_date) == year)
+    if month:
+        q = q.filter(extract("month", Transaction.transaction_date) == month)
+    if start_date:
+        q = q.filter(Transaction.transaction_date >= start_date)
+    if end_date:
+        q = q.filter(Transaction.transaction_date <= end_date)
+    rows = q.order_by(Transaction.transaction_date.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["date", "type", "category", "amount", "currency", "amount_usd", "description", "notes", "recurring"])
+    for t in rows:
+        writer.writerow([
+            t.transaction_date.isoformat(),
+            t.type.value,
+            t.category.value,
+            float(t.amount),
+            t.currency.value,
+            float(t.amount_in_usd) if t.amount_in_usd else "",
+            t.description or "",
+            t.notes or "",
+            t.recurring_frequency.value if t.is_recurring and t.recurring_frequency else "",
+        ])
+    output.seek(0)
+    filename = f"transactions_{date.today().isoformat()}.csv"
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 @router.get("/{transaction_id}", response_model=TransactionResponse)
 def get_transaction(
     transaction_id: UUID,
@@ -319,51 +364,6 @@ def delete_transaction(
     tx = _get_transaction_or_404(transaction_id, current_user.id, db)
     db.delete(tx)
     db.commit()
-
-
-@router.get("/export", response_class=StreamingResponse)
-def export_transactions_csv(
-    year: Optional[int] = Query(None, ge=2000, le=2100),
-    month: Optional[int] = Query(None, ge=1, le=12),
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
-    current_user=Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Download transactions as a CSV file."""
-    q = db.query(Transaction).filter(Transaction.user_id == current_user.id)
-    if year:
-        q = q.filter(extract("year", Transaction.transaction_date) == year)
-    if month:
-        q = q.filter(extract("month", Transaction.transaction_date) == month)
-    if start_date:
-        q = q.filter(Transaction.transaction_date >= start_date)
-    if end_date:
-        q = q.filter(Transaction.transaction_date <= end_date)
-    rows = q.order_by(Transaction.transaction_date.desc()).all()
-
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(["date", "type", "category", "amount", "currency", "amount_usd", "description", "notes", "recurring"])
-    for t in rows:
-        writer.writerow([
-            t.transaction_date.isoformat(),
-            t.type.value,
-            t.category.value,
-            float(t.amount),
-            t.currency.value,
-            float(t.amount_in_usd) if t.amount_in_usd else "",
-            t.description or "",
-            t.notes or "",
-            t.recurring_frequency.value if t.is_recurring and t.recurring_frequency else "",
-        ])
-    output.seek(0)
-    filename = f"transactions_{date.today().isoformat()}.csv"
-    return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
-    )
 
 
 @router.post("/{transaction_id}/receipt", response_model=ReceiptUploadResponse)

@@ -846,8 +846,6 @@ const TIMEZONES = [
 const s: Record<string, React.CSSProperties> = {
   page: {
     padding: '32px',
-    maxWidth: '960px',
-    margin: '0 auto',
     color: 'var(--text-light)',
   },
   pageTitle: {

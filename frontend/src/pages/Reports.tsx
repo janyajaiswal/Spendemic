@@ -51,23 +51,30 @@ interface ChartPoint {
 // ─────────────────────────────────────────────────────
 // Custom Tooltip
 // ─────────────────────────────────────────────────────
+function isLight() {
+  return document.documentElement.getAttribute('data-theme') === 'light';
+}
+
 function ForecastTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as ChartPoint;
+  const light = isLight();
   return (
     <div style={{
-      background: '#0d3533', border: '1px solid rgba(255,227,180,0.15)',
+      background: light ? '#fff' : '#0d3533',
+      border: `1px solid ${light ? 'rgba(14,76,73,0.18)' : 'rgba(255,227,180,0.15)'}`,
       borderRadius: 8, padding: '10px 14px', fontSize: 13,
+      boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
     }}>
-      <div style={{ color: '#ffe3b4', fontWeight: 700, marginBottom: 6 }}>{label}</div>
+      <div style={{ color: light ? '#0e4c49' : '#ffe3b4', fontWeight: 700, marginBottom: 6 }}>{label}</div>
       {d.actual != null && (
-        <div style={{ color: '#ecc7b0' }}>Actual: <b>{usd(d.actual)}</b></div>
+        <div style={{ color: light ? '#5a3d2b' : '#ecc7b0' }}>Actual: <b>{usd(d.actual)}</b></div>
       )}
       {d.median != null && (
         <>
-          <div style={{ color: '#ffe3b4' }}>Forecast: <b>{usd(d.median)}</b></div>
+          <div style={{ color: light ? '#0e4c49' : '#ffe3b4' }}>Forecast: <b>{usd(d.median)}</b></div>
           {d.lower != null && d.bandWidth != null && (
-            <div style={{ color: 'rgba(236,199,176,0.55)', fontSize: 11 }}>
+            <div style={{ color: light ? 'rgba(14,76,73,0.55)' : 'rgba(236,199,176,0.55)', fontSize: 11 }}>
               Range: {usd(d.lower)} – {usd(d.lower + d.bandWidth)}
             </div>
           )}
@@ -82,9 +89,8 @@ function ForecastTooltip({ active, payload, label }: any) {
 // ─────────────────────────────────────────────────────
 function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{
+    <div className="card-ombre" style={{
       background: 'var(--bg-card)',
-      border: '1px solid var(--border)',
       borderRadius: 12,
       padding: '20px 24px',
       ...style,
@@ -201,7 +207,7 @@ export default function Reports() {
   // Render
   // ─────────────────────────────────────────────────────
   return (
-    <div style={{ padding: '32px 36px', maxWidth: 1100, margin: '0 auto' }}>
+    <div style={{ padding: '32px 36px' }}>
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28, flexWrap: 'wrap' }}>
@@ -361,67 +367,81 @@ export default function Reports() {
               <div>No data yet. Import transactions to generate a forecast.</div>
             </div>
           </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,227,180,0.06)" />
-              <XAxis
-                dataKey="label"
-                tick={{ fill: 'rgba(236,199,176,0.5)', fontSize: 11 }}
-                axisLine={{ stroke: 'rgba(255,227,180,0.1)' }}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fill: 'rgba(236,199,176,0.5)', fontSize: 11 }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={v => `$${(v / 1000).toFixed(1)}k`}
-                width={52}
-              />
-              <Tooltip content={<ForecastTooltip />} />
-
-              {boundaryLabel && (
-                <ReferenceLine
-                  x={boundaryLabel}
-                  stroke="rgba(255,227,180,0.2)"
-                  strokeDasharray="4 3"
-                  label={{ value: 'Forecast →', fill: 'rgba(236,199,176,0.45)', fontSize: 11, position: 'insideTopRight' }}
+        ) : (() => {
+          const light = isLight();
+          const gridStroke  = light ? 'rgba(14,76,73,0.08)'  : 'rgba(255,227,180,0.07)';
+          const axisStroke  = light ? 'rgba(14,76,73,0.15)'  : 'rgba(255,227,180,0.1)';
+          const tickFill    = light ? 'rgba(14,76,73,0.55)'  : 'rgba(236,199,176,0.5)';
+          const barFill     = light ? '#0e4c49'               : '#9ca3af';
+          const bandFill    = light ? '#0e4c49'               : '#ffe3b4';
+          const bandOpacity = light ? 0.1                     : 0.12;
+          const lineStroke  = light ? '#0e4c49'               : '#ffd700';
+          const dotFill     = light ? '#0e4c49'               : '#ffd700';
+          const dotStroke   = light ? '#fff'                  : '#0d3533';
+          const refStroke   = light ? 'rgba(14,76,73,0.25)'  : 'rgba(255,227,180,0.2)';
+          const refLabel    = light ? 'rgba(14,76,73,0.5)'   : 'rgba(236,199,176,0.45)';
+          return (
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart data={chartData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fill: tickFill, fontSize: 11 }}
+                  axisLine={{ stroke: axisStroke }}
+                  tickLine={false}
                 />
-              )}
+                <YAxis
+                  tick={{ fill: tickFill, fontSize: 11 }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={v => `$${(v / 1000).toFixed(1)}k`}
+                  width={52}
+                />
+                <Tooltip content={<ForecastTooltip />} />
 
-              <Bar dataKey="actual" name="Actual" fill="#9ca3af" radius={[3,3,0,0]} maxBarSize={40} />
+                {boundaryLabel && (
+                  <ReferenceLine
+                    x={boundaryLabel}
+                    stroke={refStroke}
+                    strokeDasharray="4 3"
+                    label={{ value: 'Forecast →', fill: refLabel, fontSize: 11, position: 'insideTopRight' }}
+                  />
+                )}
 
-              <Area
-                dataKey="lower"
-                stackId="band"
-                stroke="none"
-                fill="transparent"
-                legendType="none"
-                activeDot={false}
-              />
-              <Area
-                dataKey="bandWidth"
-                stackId="band"
-                name="Confidence band"
-                stroke="none"
-                fill="#ffe3b4"
-                fillOpacity={0.12}
-                activeDot={false}
-              />
+                <Bar dataKey="actual" name="Actual" fill={barFill} radius={[3,3,0,0]} maxBarSize={40} />
 
-              <Line
-                dataKey="median"
-                name="Forecast median"
-                stroke="#ffe3b4"
-                strokeWidth={2.5}
-                strokeDasharray="6 3"
-                dot={{ r: 4, fill: '#ffe3b4', stroke: '#0d3533', strokeWidth: 2 }}
-                activeDot={{ r: 6 }}
-                connectNulls
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        )}
+                <Area
+                  dataKey="lower"
+                  stackId="band"
+                  stroke="none"
+                  fill="transparent"
+                  legendType="none"
+                  activeDot={false}
+                />
+                <Area
+                  dataKey="bandWidth"
+                  stackId="band"
+                  name="Confidence band"
+                  stroke="none"
+                  fill={bandFill}
+                  fillOpacity={bandOpacity}
+                  activeDot={false}
+                />
+
+                <Line
+                  dataKey="median"
+                  name="Forecast median"
+                  stroke={lineStroke}
+                  strokeWidth={2.5}
+                  strokeDasharray="6 3"
+                  dot={{ r: 4, fill: dotFill, stroke: dotStroke, strokeWidth: 2 }}
+                  activeDot={{ r: 6 }}
+                  connectNulls
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          );
+        })()}
       </Card>
 
       {/* ── Graduation Forecast Card ── */}

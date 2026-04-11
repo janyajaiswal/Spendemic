@@ -340,7 +340,7 @@ export default function Dashboard() {
           </h3>
           <div style={s.featureGrid}>
             {filteredFeatures.map(f => (
-              <div key={f.title} style={s.featureCard}>
+              <div key={f.title} className="dash-card" style={s.featureCard}>
                 <h4 style={s.featureTitle}>{f.title}</h4>
                 <p style={s.featureDesc}>{f.desc}</p>
                 <Link to={f.link} style={s.featureLink}>
@@ -378,7 +378,7 @@ export default function Dashboard() {
                   { label: 'Expenses', value: summary?.total_expenses ?? 0, color: '#f87171' },
                   { label: 'Net Savings', value: summary?.net ?? 0, color: (summary?.net ?? 0) >= 0 ? '#4ade80' : '#f87171' },
                 ].map(c => (
-                  <div key={c.label} style={s.healthCard}>
+                  <div key={c.label} className="dash-card" style={s.healthCard}>
                     <span style={s.healthLabel}>{c.label}</span>
                     <span style={{ ...s.healthValue, color: c.color }}>
                       {summary?.workingCurrency ?? 'USD'}{' '}
@@ -394,7 +394,7 @@ export default function Dashboard() {
                   <h3 style={s.sectionTitle}>All activity by category ({summary.workingCurrency})</h3>
                   <div style={s.catGrid}>
                     {Object.entries(summary.by_category).map(([cat, amt]) => (
-                      <div key={cat} style={s.catCard}>
+                      <div key={cat} className="dash-card" style={s.catCard}>
                         <span style={s.catName}>{cat.replace(/_/g, ' ')}</span>
                         <span style={s.catAmt}>{summary.workingCurrency} {Number(amt).toFixed(2)}</span>
                       </div>
@@ -434,23 +434,28 @@ export default function Dashboard() {
               {cashflow.length > 0 && cashflow.some(m => m.income > 0 || m.expenses > 0) && (
                 <>
                   <h3 style={s.sectionTitle}>6-Month Cash Flow</h3>
-                  <div style={{ background: 'rgba(255,227,180,0.03)', border: '1px solid var(--border)', borderRadius: 12, padding: '16px 8px 8px' }}>
-                    <ResponsiveContainer width="100%" height={200}>
-                      <BarChart data={cashflow} margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,227,180,0.06)" />
-                        <XAxis dataKey="month" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} width={50} tickFormatter={v => `$${v}`} />
-                        <Tooltip
-                          contentStyle={{ background: '#0d3533', border: '1px solid rgba(255,227,180,0.1)', borderRadius: 8, fontSize: 12 }}
-                          labelStyle={{ color: '#ffe3b4', fontWeight: 600 }}
-                          formatter={(v: unknown, name: unknown) => [`$${Number(v).toFixed(2)}`, String(name)]}
-                        />
-                        <Legend wrapperStyle={{ fontSize: 12, color: 'var(--text-muted)' }} />
-                        <Bar dataKey="income" name="Income" fill="#2dd4bf" radius={[4,4,0,0]} />
-                        <Bar dataKey="expenses" name="Expenses" fill="#f59e0b" radius={[4,4,0,0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+                  {(() => {
+                    const light = document.documentElement.getAttribute('data-theme') === 'light';
+                    return (
+                      <div style={{ background: light ? 'rgba(14,76,73,0.03)' : 'rgba(255,227,180,0.03)', border: '1px solid rgba(255,215,0,0.1)', borderRadius: 12, padding: '16px 8px 8px' }}>
+                        <ResponsiveContainer width="100%" height={200}>
+                          <BarChart data={cashflow} margin={{ top: 0, right: 12, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={light ? 'rgba(14,76,73,0.08)' : 'rgba(255,227,180,0.06)'} />
+                            <XAxis dataKey="month" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} width={50} tickFormatter={v => `$${v}`} />
+                            <Tooltip
+                              contentStyle={{ background: light ? '#fff' : '#0d3533', border: `1px solid ${light ? 'rgba(14,76,73,0.15)' : 'rgba(255,227,180,0.1)'}`, borderRadius: 8, fontSize: 12 }}
+                              labelStyle={{ color: light ? '#0e4c49' : '#ffe3b4', fontWeight: 600 }}
+                              formatter={(v: unknown, name: unknown) => [`$${Number(v).toFixed(2)}`, String(name)]}
+                            />
+                            <Legend wrapperStyle={{ fontSize: 12, color: 'var(--text-muted)' }} />
+                            <Bar dataKey="income" name="Income" fill="#2dd4bf" radius={[4,4,0,0]} />
+                            <Bar dataKey="expenses" name="Expenses" fill="#f59e0b" radius={[4,4,0,0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    );
+                  })()}
                 </>
               )}
 
@@ -521,7 +526,7 @@ export default function Dashboard() {
           <h3 style={s.sectionTitle}>Work authorization rules</h3>
           <div style={s.visaRulesGrid}>
             {VISA_RULES.map(v => (
-              <div key={v.visa} style={s.visaCard}>
+              <div key={v.visa} className="dash-card" style={s.visaCard}>
                 <h4 style={s.visaCardTitle}>{v.visa}</h4>
                 <ul style={s.visaRuleList}>
                   {v.rules.map((r, i) => <li key={i} style={s.visaRuleItem}>{r}</li>)}
@@ -548,7 +553,7 @@ export default function Dashboard() {
                   {sec.items
                     .filter(i => !q || i.label.toLowerCase().includes(q))
                     .map((item, idx) => (
-                      <div key={idx} style={s.resCard}>
+                      <div key={idx} className="dash-card" style={s.resCard}>
                         {item.href
                           ? <a href={item.href} target="_blank" rel="noopener noreferrer" style={{ ...s.resLabel, color: 'var(--accent)', textDecoration: 'none' }}>{item.label} ↗</a>
                           : <p style={s.resLabel}>{item.label}</p>
@@ -566,7 +571,7 @@ export default function Dashboard() {
 }
 
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: '32px 36px', maxWidth: '1100px', margin: '0 auto' },
+  page: { padding: '32px 36px' },
   topBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', gap: '16px', flexWrap: 'wrap' },
   title: { fontSize: '1.5em', fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.3px', margin: 0 },
   subtitle: { fontSize: '0.875em', color: 'var(--text-secondary)', opacity: 0.65, margin: '4px 0 0' },
@@ -582,14 +587,14 @@ const s: Record<string, React.CSSProperties> = {
   searchClear: { background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', opacity: 0.5, fontSize: '0.875em' },
   tabBar: {
     display: 'flex', gap: '4px', borderBottom: '1px solid var(--border)',
-    marginBottom: '28px', overflowX: 'auto',
+    marginBottom: '28px', flexWrap: 'wrap',
   },
   tab: {
     padding: '10px 20px', background: 'none', border: 'none', borderBottom: '2px solid transparent',
     color: 'var(--text-secondary)', opacity: 0.6, cursor: 'pointer', fontSize: '0.875em',
     fontWeight: 500, whiteSpace: 'nowrap', marginBottom: '-1px', transition: 'all 0.15s', fontFamily: 'inherit',
   },
-  tabActive: { opacity: 1, color: 'var(--accent)', borderBottom: '2px solid var(--accent)', fontWeight: 700 },
+  tabActive: { opacity: 1, color: 'var(--highlight)', borderBottom: '2px solid var(--highlight)', fontWeight: 700 },
 
   // Overview
   hero: {
@@ -602,12 +607,11 @@ const s: Record<string, React.CSSProperties> = {
   sectionTitle: { fontSize: '0.7em', fontWeight: 700, color: 'var(--text-secondary)', opacity: 0.55, textTransform: 'uppercase', letterSpacing: '1px', margin: '24px 0 12px' },
   featureGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' },
   featureCard: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
     borderRadius: '12px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '10px',
   },
   featureTitle: { fontSize: '1em', fontWeight: 700, margin: 0, color: 'var(--text-primary)' },
   featureDesc: { fontSize: '0.83em', color: 'var(--text-secondary)', opacity: 0.65, lineHeight: 1.6, flex: 1, margin: 0 },
-  featureLink: { fontSize: '0.83em', fontWeight: 600, textDecoration: 'none', color: 'var(--accent)' },
+  featureLink: { fontSize: '0.83em', fontWeight: 600, textDecoration: 'none', color: 'var(--highlight)' },
   noResults: { gridColumn: '1/-1', color: 'var(--text-secondary)', opacity: 0.5, textAlign: 'center' },
 
   // Health
@@ -619,14 +623,12 @@ const s: Record<string, React.CSSProperties> = {
   },
   healthStrip: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px', marginBottom: '28px' },
   healthCard: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
     borderRadius: '12px', padding: '20px', display: 'flex', flexDirection: 'column', gap: '8px',
   },
   healthLabel: { fontSize: '0.7em', color: 'var(--text-secondary)', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 600 },
   healthValue: { fontSize: '1.4em', fontWeight: 700 },
   catGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', marginBottom: '28px' },
   catCard: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
     borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center',
   },
   catName: { fontSize: '0.72em', color: 'var(--text-secondary)', opacity: 0.6, textTransform: 'uppercase', textAlign: 'center', letterSpacing: '0.4px' },
@@ -638,7 +640,7 @@ const s: Record<string, React.CSSProperties> = {
   budgetBarFill: { height: '100%', borderRadius: '3px', transition: 'width 0.4s' },
   budgetPct: { width: '40px', textAlign: 'right', fontSize: '0.8em', fontWeight: 700, flexShrink: 0 },
   budgetAmt: { width: '120px', textAlign: 'right', fontSize: '0.75em', color: 'var(--text-secondary)', opacity: 0.5, flexShrink: 0 },
-  seeAll: { fontSize: '0.83em', color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' },
+  seeAll: { fontSize: '0.83em', color: 'var(--highlight)', fontWeight: 600, textDecoration: 'none' },
   emptyHint: { textAlign: 'center', marginTop: '60px', color: 'var(--text-secondary)', opacity: 0.5, fontSize: '0.875em' },
 
   // Visa
@@ -658,7 +660,6 @@ const s: Record<string, React.CSSProperties> = {
   hoursBarFill: { height: '100%', borderRadius: '4px', transition: 'width 0.4s' },
   visaRulesGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '14px' },
   visaCard: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
     borderRadius: '12px', padding: '20px',
   },
   visaCardTitle: { color: 'var(--text-primary)', fontWeight: 700, fontSize: '0.95em', margin: '0 0 12px' },
@@ -671,7 +672,6 @@ const s: Record<string, React.CSSProperties> = {
   resSectionTitle: { fontSize: '0.875em', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '14px' },
   resGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '12px' },
   resCard: {
-    background: 'var(--bg-card)', border: '1px solid var(--border)',
     borderRadius: '10px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '6px',
   },
   resLabel: { fontSize: '0.875em', fontWeight: 600, color: 'var(--text-primary)', margin: 0 },

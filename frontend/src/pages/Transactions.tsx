@@ -1602,7 +1602,7 @@ export default function Transactions() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const s: Record<string, React.CSSProperties> = {
-  page: { padding: '32px', maxWidth: '900px', margin: '0 auto', position: 'relative' },
+  page: { padding: '32px', position: 'relative' },
   centered: { display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px' },
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' },
   title: { fontSize: '1.8em', fontWeight: 700, color: 'var(--brand-gold)', margin: 0 },

@@ -2,8 +2,6 @@
 
 .budgets-page {
   padding: 32px 36px;
-  max-width: 1000px;
-  margin: 0 auto;
 }
 
 .budgets-header {
@@ -32,6 +30,11 @@
   margin-bottom: 24px;
 }
 
+[data-theme="light"] .budgets-tab-bar {
+  background: rgba(14, 76, 73, 0.04);
+  border-color: rgba(14, 76, 73, 0.14);
+}
+
 .budgets-tab-btn {
   flex: 1;
   padding: 9px 16px;
@@ -46,7 +49,7 @@
 }
 
 .budgets-tab-btn.active {
-  background: var(--accent);
+  background: var(--highlight);
   color: var(--teal-900, #071e1c);
   font-weight: 700;
 }
@@ -63,14 +66,20 @@
   margin-bottom: 24px;
 }
 
+/* ── Budget cards ── */
 .budget-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 215, 0, 0.12);
   border-radius: 12px;
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+[data-theme="light"] .budget-card {
+  background: linear-gradient(135deg, #daeeed 0%, #fff4e0 100%);
+  border: 1px solid rgba(14, 76, 73, 0.45);
 }
 
 .budget-card-header {
@@ -111,6 +120,7 @@
   border-radius: 99px;
   overflow: hidden;
 }
+[data-theme="light"] .budget-progress-bar { background: rgba(14, 76, 73, 0.15); }
 
 .budget-progress-fill {
   height: 100%;
@@ -118,21 +128,44 @@
   transition: width 0.4s ease;
 }
 
-/* Colorblind-safe status */
+/* Colorblind-safe status fills */
 .status-ok   .budget-progress-fill { background: #2dd4bf; }
 .status-warn .budget-progress-fill { background: #f59e0b; }
 .status-over .budget-progress-fill { background: #f87171; }
 
-.status-ok   .budget-card { border-color: rgba(45, 212, 191, 0.2); }
-.status-warn .budget-card { border-color: rgba(245, 158, 11, 0.2); }
-.status-over .budget-card { border-color: rgba(248, 113, 113, 0.2); }
+/* Status tints in light mode — slightly different gradient */
+[data-theme="light"] .status-ok   .budget-card { background: linear-gradient(135deg, #c8f0ec 0%, #fff4e0 100%); }
+[data-theme="light"] .status-warn .budget-card { background: linear-gradient(135deg, #fef3c7 0%, #fff4e0 100%); }
+[data-theme="light"] .status-over .budget-card { background: linear-gradient(135deg, #fee2e2 0%, #fff4e0 100%); }
+
+/* ── Strip summary cards (inline-styled, get gradient via class) ── */
+.budgets-strip-card {
+  background: var(--bg-card) !important;
+  border: 1px solid rgba(255, 215, 0, 0.12) !important;
+  border-radius: 12px;
+}
+[data-theme="light"] .budgets-strip-card {
+  background: linear-gradient(135deg, #daeeed 0%, #fff4e0 100%) !important;
+  border: 1px solid rgba(14, 76, 73, 0.45) !important;
+}
+
+/* ── Inline-styled budget/goal cards ── */
+.budgets-inline-card {
+  background: var(--bg-card) !important;
+  border: 1px solid rgba(255, 215, 0, 0.12) !important;
+  border-radius: 14px;
+}
+[data-theme="light"] .budgets-inline-card {
+  background: linear-gradient(135deg, #daeeed 0%, #fff4e0 100%) !important;
+  border: 1px solid rgba(14, 76, 73, 0.45) !important;
+}
 
 .budgets-add-btn {
   display: inline-flex;
   align-items: center;
   gap: 7px;
   padding: 10px 20px;
-  background: var(--accent);
+  background: var(--highlight);
   color: var(--teal-900, #071e1c);
   border: none;
   border-radius: 9px;
@@ -163,21 +196,31 @@
 }
 
 .budgets-export-btn:hover {
-  border-color: var(--border-focus);
-  color: var(--accent);
+  border-color: var(--highlight);
+  color: var(--highlight);
   transform: none;
   box-shadow: none;
 }
 
-/* Goals */
+[data-theme="light"] .budgets-export-btn:hover {
+  border-color: var(--teal-600);
+  color: var(--teal-600);
+}
+
+/* ── Goals ── */
 .goal-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 215, 0, 0.12);
   border-radius: 12px;
   padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+[data-theme="light"] .goal-card {
+  background: linear-gradient(135deg, #daeeed 0%, #fff4e0 100%);
+  border: 1px solid rgba(14, 76, 73, 0.45);
 }
 
 .goal-progress-bar {
@@ -186,6 +229,7 @@
   border-radius: 99px;
   overflow: hidden;
 }
+[data-theme="light"] .goal-progress-bar { background: rgba(14, 76, 73, 0.15); }
 
 .goal-progress-fill {
   height: 100%;
@@ -194,7 +238,9 @@
   transition: width 0.4s ease;
 }
 
-/* Overlay / Modal */
+[data-theme="light"] .goal-progress-fill { background: var(--teal-600); }
+
+/* ── Overlay / Modal ── */
 .budgets-overlay {
   position: fixed;
   inset: 0;
@@ -216,4 +262,9 @@
   max-width: 440px;
   max-height: 90vh;
   overflow-y: auto;
+}
+
+[data-theme="light"] .budgets-modal {
+  background: #fff;
+  border-color: rgba(14, 76, 73, 0.45);
 }

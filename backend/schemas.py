@@ -659,6 +659,21 @@ class FAQSubmissionReview(BaseModel):
     answer: Optional[str] = None
 
 
+class FAQAnswerCreate(BaseModel):
+    answer_text: str = Field(..., min_length=3, max_length=5000)
+
+
+class FAQAnswerResponse(BaseModel):
+    id: UUID
+    question_id: UUID
+    user_id: UUID
+    author_name: Optional[str] = None
+    answer_text: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class FAQSubmissionResponse(BaseModel):
     id: UUID
     user_id: UUID
@@ -667,6 +682,7 @@ class FAQSubmissionResponse(BaseModel):
     category: Optional[str] = None
     status: str
     created_at: datetime
+    answers: List[FAQAnswerResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 

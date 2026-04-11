@@ -19,6 +19,7 @@
   --text-muted:      rgba(236, 199, 176, 0.5);
   --accent:          var(--cream);
   --accent-dk:       var(--blush-dk);
+  --highlight:       #ffd700;
   --border:          rgba(255, 227, 180, 0.1);
   --border-focus:    rgba(255, 227, 180, 0.4);
 
@@ -66,20 +67,25 @@ button:active { opacity: 0.75; }
 
 /* ── Light theme ──────────────────────────────────────────────────────────── */
 [data-theme="light"] {
-  --bg-main:        var(--cream);
-  --bg-secondary:   #fff8ef;
+  /* sidebar = cream/beige, main = white */
+  --bg-main:        #ffffff;
+  --bg-sidebar:     var(--cream);          /* beige sidebar */
+  --bg-secondary:   var(--cream);
   --bg-card:        #ffffff;
+  --card-border-from: #0e4c49;             /* green side of card ombre border */
+  --card-border-to:   #d4a882;             /* blush/beige side */
   --text-primary:   var(--teal-600);
   --text-secondary: #5a3d2b;
   --text-muted:     rgba(90, 61, 43, 0.5);
   --accent:         var(--teal-600);
   --accent-dk:      var(--teal-900);
-  --border:         rgba(14, 76, 73, 0.12);
+  --highlight:      #e6a800;               /* yellow highlight */
+  --border:         rgba(14, 76, 73, 0.14);
   --border-focus:   var(--teal-600);
 
   --brand-maroon:       #ffffff;
   --brand-maroon-light: var(--blush);
-  --brand-maroon-dark:  #fff8ef;
+  --brand-maroon-dark:  var(--cream);
   --brand-rose:         #5a3d2b;
   --brand-gold:         var(--teal-600);
   --brand-gold-dark:    var(--teal-900);
@@ -88,7 +94,7 @@ button:active { opacity: 0.75; }
 }
 
 [data-theme="light"] body {
-  background: var(--cream);
+  background: #ffffff;
   color: var(--teal-600);
 }
 
@@ -123,3 +129,37 @@ button:active { opacity: 0.75; }
 
 /* ── App shell ────────────────────────────────────────────────────────────── */
 #root { min-height: 100vh; display: flex; }
+
+/* ── Yellow highlight utility ─────────────────────────────────────────────── */
+.highlight { color: var(--highlight); }
+mark, .mark {
+  background: rgba(255, 215, 0, 0.18);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+[data-theme="light"] mark,
+[data-theme="light"] .mark {
+  background: rgba(230, 168, 0, 0.18);
+}
+
+/* ── Card gradient fill (light mode) ─────────────────────────────────────── */
+.card-ombre {
+  border: 1px solid rgba(255, 215, 0, 0.12) !important;
+}
+
+[data-theme="light"] .card-ombre {
+  background: linear-gradient(135deg, #daeeed 0%, #fff4e0 100%) !important;
+  border: 1px solid rgba(14, 76, 73, 0.45) !important;
+}
+
+/* ── Active / focus accent yellow ─────────────────────────────────────────── */
+[data-theme="dark"] .tab-active-yellow,
+.tab-active-yellow {
+  border-bottom-color: var(--highlight) !important;
+  color: var(--highlight) !important;
+}
+[data-theme="light"] .tab-active-yellow {
+  border-bottom-color: var(--teal-600) !important;
+  color: var(--teal-600) !important;
+}

@@ -697,9 +697,9 @@ class JobHoursLog(Base):
 # ==================== FAQ SUBMISSIONS ====================
 
 class FAQStatusEnum(str, enum.Enum):
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
+    OPEN = "open"        # visible immediately, awaiting community answers
+    APPROVED = "approved"  # kept for legacy static-style entries
+    REJECTED = "rejected"  # removed from view by admin
 
 
 class FAQSubmission(Base):
@@ -715,13 +715,36 @@ class FAQSubmission(Base):
     answer: Optional[str] = Column(Text, nullable=True)
     category: Optional[str] = Column(String(100), nullable=True)
     status: FAQStatusEnum = Column(
-        Enum(FAQStatusEnum), nullable=False, default=FAQStatusEnum.PENDING
+        Enum(FAQStatusEnum, native_enum=False), nullable=False, default=FAQStatusEnum.OPEN
     )
     created_at: datetime = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", back_populates="faq_submissions")
+    answers = relationship("FAQAnswer", back_populates="question", cascade="all, delete-orphan", order_by="FAQAnswer.created_at")
 
     __table_args__ = (
         Index("ix_faq_submissions_user_id", "user_id"),
         Index("ix_faq_submissions_status", "status"),
     )
+
+
+class FAQAnswer(Base):
+    __tablename__ = "faq_answers"
+
+    id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    question_id: UUID = Column(
+        UUID(as_uuid=True),
+        ForeignKey("faq_submissions.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id: UUID = Column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    author_name: Optional[str] = Column(String(200), nullable=True)
+    answer_text: str = Column(Text, nullable=False)
+    created_at: datetime = Column(DateTime(timezone=True), server_default=func.now())
+
+    question = relationship("FAQSubmission", back_populates="answers")
+    author = relationship("User")

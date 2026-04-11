@@ -1,9 +1,13 @@
 /* Dashboard */
 
+/* Light mode card gradient fill — teal to beige ombre */
+:root {
+  --card-gradient: linear-gradient(135deg, #daeeed 0%, #fff4e0 100%);
+  --card-gradient-hover: linear-gradient(135deg, #c8e6e4 0%, #ffe3b4 100%);
+}
+
 .dashboard-page {
   padding: 32px 36px;
-  max-width: 1100px;
-  margin: 0 auto;
 }
 
 .dashboard-topbar {
@@ -31,6 +35,11 @@
   flex-wrap: wrap;
 }
 
+[data-theme="light"] .dashboard-tab-bar {
+  background: rgba(14, 76, 73, 0.04);
+  border-color: rgba(14, 76, 73, 0.14);
+}
+
 .dashboard-tab-btn {
   flex: 1;
   padding: 9px 16px;
@@ -46,7 +55,7 @@
 }
 
 .dashboard-tab-btn.active {
-  background: var(--accent);
+  background: var(--highlight);
   color: var(--teal-900, #071e1c);
   font-weight: 700;
 }
@@ -65,19 +74,26 @@
 
 .dashboard-feature-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 215, 0, 0.12);
   border-radius: 12px;
   padding: 20px;
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: background 0.2s, border-color 0.2s;
   text-decoration: none;
   display: block;
 }
 
 .dashboard-feature-card:hover {
-  border-color: var(--border-focus);
-  transform: none;
-  box-shadow: none;
+  border-color: var(--highlight);
+}
+
+[data-theme="light"] .dashboard-feature-card {
+  background: var(--card-gradient);
+  border: 1px solid rgba(14, 76, 73, 0.45);
+}
+
+[data-theme="light"] .dashboard-feature-card:hover {
+  background: var(--card-gradient-hover);
 }
 
 .dashboard-section-title {
@@ -99,9 +115,14 @@
 
 .dashboard-stat-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 215, 0, 0.12);
   border-radius: 12px;
   padding: 20px;
+}
+
+[data-theme="light"] .dashboard-stat-card {
+  background: var(--card-gradient);
+  border: 1px solid rgba(14, 76, 73, 0.45);
 }
 
 .dashboard-stat-label {
@@ -123,10 +144,15 @@
 
 .dashboard-chart-wrap {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255, 215, 0, 0.12);
   border-radius: 12px;
   padding: 24px;
   margin-bottom: 24px;
+}
+
+[data-theme="light"] .dashboard-chart-wrap {
+  background: var(--card-gradient);
+  border: 1px solid rgba(14, 76, 73, 0.45);
 }
 
 .dashboard-empty {
@@ -134,4 +160,19 @@
   padding: 60px 20px;
   color: var(--text-muted);
   font-size: 0.9em;
+}
+
+/* Applies to all inline-styled cards on Dashboard via className="dash-card" */
+.dash-card {
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 215, 0, 0.12);
+}
+
+[data-theme="light"] .dash-card {
+  background: var(--card-gradient) !important;
+  border: 1px solid rgba(14, 76, 73, 0.45) !important;
+}
+
+[data-theme="light"] .dash-card:hover {
+  background: var(--card-gradient-hover) !important;
 }

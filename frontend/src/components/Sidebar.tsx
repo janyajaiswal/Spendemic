@@ -53,16 +53,23 @@ export default function Sidebar() {
   useEffect(() => {
     const token = user?.accessToken;
     if (!token) { setAlertItems([]); return; }
-    fetch(`${API}/alerts`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : [])
-      .then((data: AlertItem[]) => {
-        setAlertItems(data);
-        if (soundEnabled && data.length > prevAlertCount.current && data.length > 0) {
-          playChime();
-        }
-        prevAlertCount.current = data.length;
-      })
-      .catch(() => {});
+
+    const fetchAlerts = () => {
+      fetch(`${API}/alerts`, { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : [])
+        .then((data: AlertItem[]) => {
+          setAlertItems(data);
+          if (soundEnabled && data.length > prevAlertCount.current && data.length > 0) {
+            playChime();
+          }
+          prevAlertCount.current = data.length;
+        })
+        .catch(() => {});
+    };
+
+    fetchAlerts();
+    const interval = setInterval(fetchAlerts, 20000);
+    return () => clearInterval(interval);
   }, [user, soundEnabled]);
 
   useEffect(() => {

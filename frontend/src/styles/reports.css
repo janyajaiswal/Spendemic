@@ -2,8 +2,6 @@
 
 .reports-page {
   padding: 32px 36px;
-  max-width: 1100px;
-  margin: 0 auto;
 }
 
 .reports-header {
@@ -235,3 +233,8 @@
   border-bottom: 1px solid var(--border);
   color: var(--text-primary);
 }
+
+/* ── Light mode: dark green outlines ── */
+[data-theme="light"] .reports-card,
+[data-theme="light"] .reports-data-gate,
+[data-theme="light"] .reports-chart-wrap { border-color: rgba(14, 76, 73, 0.45); }
