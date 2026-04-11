@@ -5,6 +5,7 @@ import {
   ChevronDown, FlaskConical, Upload,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import type { TxType, RecurFreq, Category, Transaction } from '../types';
 
 const API = 'http://localhost:8000/api/v1';
 
@@ -33,31 +34,6 @@ const EMPTY_FC: FcData = {
   rent: '', food_estimate: '', utilities_estimate: '',
 };
 
-type TxType = 'INCOME' | 'EXPENSE';
-type RecurFreq = 'DAILY' | 'WEEKLY' | 'BI_WEEKLY' | 'MONTHLY' | 'QUARTERLY' | 'ANNUALLY';
-
-type Category =
-  | 'HOUSING' | 'FOOD' | 'TRANSPORTATION' | 'EDUCATION' | 'HEALTHCARE'
-  | 'ENTERTAINMENT' | 'SHOPPING' | 'UTILITIES' | 'PERSONAL_CARE' | 'TRAVEL'
-  | 'SAVINGS' | 'SALARY' | 'STIPEND' | 'SCHOLARSHIP' | 'FINANCIAL_AID'
-  | 'FAMILY_SUPPORT' | 'FREELANCE' | 'OTHER';
-
-interface Transaction {
-  id: string;
-  amount: string;
-  currency: string;
-  type: TxType;
-  category: Category;
-  description: string | null;
-  notes: string | null;
-  receipt_url: string | null;
-  transaction_date: string;
-  is_recurring: boolean;
-  recurring_frequency: RecurFreq | null;
-  recurring_parent_id: string | null;
-  is_generated: boolean;
-  created_at: string;
-}
 
 interface FormState {
   amount: string;

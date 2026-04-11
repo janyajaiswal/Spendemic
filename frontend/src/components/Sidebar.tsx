@@ -3,17 +3,10 @@ import { useState, useEffect, useRef } from 'react';
 import { LayoutDashboard, Wallet, CreditCard, TrendingUp, Settings, LogIn, LogOut, Bell, HelpCircle, Volume2, VolumeX, Moon, Sun } from 'lucide-react';
 import { googleLogout } from '@react-oauth/google';
 import { useAuth } from '../contexts/AuthContext';
+import type { AlertItem } from '../types';
 import '../styles/sidebar.css';
 
 const API = 'http://localhost:8000/api/v1';
-
-interface AlertItem {
-  budget_id: string;
-  category: string;
-  type: 'BUDGET_EXCEEDED' | 'APPROACHING_LIMIT';
-  message: string;
-  utilization: number;
-}
 
 const navigationItems = [
   { label: 'Dashboard', path: '/dashboard', Icon: LayoutDashboard },

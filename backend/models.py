@@ -172,12 +172,6 @@ class BudgetPeriodEnum(str, enum.Enum):
     MONTHLY = "MONTHLY"
 
 
-class AlertTypeEnum(str, enum.Enum):
-    """Types of budget alerts the system can trigger."""
-    BUDGET_EXCEEDED = "BUDGET_EXCEEDED"        # Spent > 100% of limit
-    APPROACHING_LIMIT = "APPROACHING_LIMIT"    # Spent > threshold% of limit
-    LARGE_TRANSACTION = "LARGE_TRANSACTION"    # Single transaction > threshold amount
-    LOW_BALANCE = "LOW_BALANCE"                # Estimated balance < threshold
 
 
 # ==================== USER MODEL ====================
@@ -274,7 +268,6 @@ class User(Base):
     sessions = relationship("UserSession", back_populates="user", cascade="all, delete-orphan")
     transactions = relationship("Transaction", back_populates="user", cascade="all, delete-orphan")
     budgets = relationship("Budget", back_populates="user", cascade="all, delete-orphan")
-    alerts = relationship("Alert", back_populates="user", cascade="all, delete-orphan")
     forecast_contexts = relationship("ForecastContext", back_populates="user", cascade="all, delete-orphan")
     jobs = relationship("Job", back_populates="user", cascade="all, delete-orphan")
     goals = relationship("Goal", back_populates="user", cascade="all, delete-orphan")
@@ -440,7 +433,6 @@ class Budget(Base):
     updated_at: Optional[datetime] = Column(DateTime(timezone=True), onupdate=func.now())
 
     user = relationship("User", back_populates="budgets")
-    alerts = relationship("Alert", back_populates="budget")
 
     __table_args__ = (
         Index("ix_budgets_user_id", "user_id"),
@@ -451,53 +443,6 @@ class Budget(Base):
         return (
             f"<Budget(id={self.id}, user_id={self.user_id}, "
             f"category={self.category}, limit={self.limit_amount} {self.currency})>"
-        )
-
-
-# ==================== ALERTS ====================
-
-class Alert(Base):
-    """
-    Rule-based notification triggers for budget monitoring.
-
-    When a transaction pushes spending past a threshold, the system
-    fires an alert (via SNS or in-app notification in future phases).
-    """
-    __tablename__ = "alerts"
-
-    id: UUID = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: UUID = Column(
-        UUID(as_uuid=True),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False
-    )
-    budget_id: Optional[UUID] = Column(
-        UUID(as_uuid=True),
-        ForeignKey("budgets.id", ondelete="SET NULL"),
-        nullable=True
-    )
-
-    alert_type: AlertTypeEnum = Column(Enum(AlertTypeEnum), nullable=False)
-
-    # Threshold: percentage (0-100) for APPROACHING_LIMIT, or fixed amount for others
-    threshold_value: float = Column(Numeric(10, 2), nullable=False)
-
-    is_active: bool = Column(Boolean, default=True)
-    last_triggered_at: Optional[datetime] = Column(DateTime(timezone=True), nullable=True)
-
-    created_at: datetime = Column(DateTime(timezone=True), server_default=func.now())
-
-    user = relationship("User", back_populates="alerts")
-    budget = relationship("Budget", back_populates="alerts")
-
-    __table_args__ = (
-        Index("ix_alerts_user_id", "user_id"),
-    )
-
-    def __repr__(self) -> str:
-        return (
-            f"<Alert(id={self.id}, user_id={self.user_id}, "
-            f"type={self.alert_type}, threshold={self.threshold_value})>"
         )
 
 

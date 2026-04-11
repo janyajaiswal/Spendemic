@@ -18,7 +18,6 @@ from models import (
     TransactionTypeEnum,
     CategoryEnum,
     BudgetPeriodEnum,
-    AlertTypeEnum,
     RecurringFrequencyEnum,
     JobTypeEnum,
 )
@@ -223,13 +222,6 @@ class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserInDB(UserResponse):
-    """
-    Schema for internal database operations.
-    Inherits all fields from UserResponse.
-    Can be extended with internal-only fields (e.g., password_hash when auth is added).
-    """
-    pass
 
 
 # ==================== AUTH SCHEMAS ====================
