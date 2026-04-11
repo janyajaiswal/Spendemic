@@ -34,7 +34,12 @@ _ML_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "
 if _ML_PATH not in sys.path:
     sys.path.insert(0, _ML_PATH)
 
-import chronos_model  # noqa: E402
+# Lazy import — only available when torch/chronos are installed (local machine).
+# On Render (no torch), the module is None and endpoints return 503.
+try:
+    import chronos_model  # noqa: E402
+except Exception:
+    chronos_model = None  # type: ignore
 
 router = APIRouter(prefix="/api/v1/forecast", tags=["forecast"])
 
@@ -147,6 +152,8 @@ def forecast_to_graduation(
 # ---------------------------------------------------------------------------
 
 def _execute(history, monthly_labels, future_covariates, next_months, prediction_months, cold_start, graduation_date=None) -> dict:
+    if chronos_model is None:
+        raise HTTPException(status_code=503, detail="AI forecasting is unavailable on this server. Run the local backend to use this feature.")
     ok, msg = chronos_model.has_enough_data(history)
     if not ok:
         raise HTTPException(status_code=422, detail=msg)
@@ -484,6 +491,8 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
                 cov[key] = round(cov[key] / _WEEKS_PER_MONTH, 2)
         weekly_covariates.append(cov)
 
+    if chronos_model is None:
+        raise HTTPException(status_code=503, detail="AI forecasting is unavailable on this server. Run the local backend to use this feature.")
     ok, msg = chronos_model.has_enough_data(history)
     if not ok:
         raise HTTPException(status_code=422, detail=msg)
