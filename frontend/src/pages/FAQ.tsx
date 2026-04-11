@@ -66,7 +66,7 @@ export default function FAQ() {
 
   const token = user?.accessToken ?? '';
   const isAdmin = !!(user?.email?.endsWith('@fullerton.edu'));
-  const authHeaders = token
+  const authHeaders: Record<string, string> = token
     ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
     : { 'Content-Type': 'application/json' };
 
@@ -311,7 +311,7 @@ export default function FAQ() {
                                     <span className="faq-community-answer-date">
                                       {new Date(a.created_at).toLocaleDateString()}
                                     </span>
-                                    {user && a.user_id === user.id && (
+                                    {user && a.user_id === user.sub && (
                                       <button
                                         className="faq-delete-answer-btn"
                                         onClick={e => { e.stopPropagation(); handleDeleteAnswer(item.id, a.id); }}
