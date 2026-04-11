@@ -2,8 +2,7 @@ import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import '../styles/onboarding.css';
-
-const API = 'http://localhost:8000/api/v1';
+import { API } from '../lib/api';
 
 interface OnboardingData {
   name: string;

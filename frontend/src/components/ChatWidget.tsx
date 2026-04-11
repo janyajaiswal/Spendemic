@@ -4,7 +4,7 @@ import { MessageCircle, X, Send } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/chat.css';
 
-const API = 'http://localhost:8000/api/v1';
+import { API } from '../lib/api';
 
 interface Message {
   role: 'user' | 'assistant';

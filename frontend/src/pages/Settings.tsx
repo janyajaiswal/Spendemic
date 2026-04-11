@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { User, MapPin, BookOpen, Save, CheckCircle, AlertCircle, Briefcase } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { API_BASE } from '../lib/api';
 import '../styles/settings.css';
-
-const API_BASE = 'http://localhost:8000';
 
 type Tab = 'profile' | 'address' | 'academic' | 'jobs';
 

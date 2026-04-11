@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback } from 'react';
 import type { ReactNode } from 'react';
+import { API_BASE } from '../lib/api';
 
 interface GoogleUser {
   sub: string;
@@ -19,7 +20,6 @@ interface AuthContextType {
 }
 
 const STORAGE_KEY = 'spendemic_user';
-const API_BASE = 'http://localhost:8000';
 
 function decodeGoogleJwt(credential: string): GoogleUser {
   const base64Url = credential.split('.')[1];

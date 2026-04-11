@@ -7,7 +7,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import type { TxType, RecurFreq, Category, Transaction } from '../types';
 
-const API = 'http://localhost:8000/api/v1';
+import { API } from '../lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface FcData {

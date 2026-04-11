@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import type { AlertItem } from '../types';
 import '../styles/sidebar.css';
 
-const API = 'http://localhost:8000/api/v1';
+import { API } from '../lib/api';
 
 const navigationItems = [
   { label: 'Dashboard', path: '/dashboard', Icon: LayoutDashboard },

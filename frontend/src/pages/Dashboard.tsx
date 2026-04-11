@@ -13,7 +13,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/dashboard.css';
 
-const API = 'http://localhost:8000/api/v1';
+import { API } from '../lib/api';
 
 // ─────────────────────────────────────────────────────
 // Tab definitions

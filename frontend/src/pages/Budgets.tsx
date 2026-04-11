@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/budgets.css';
 
-const API = 'http://localhost:8000/api/v1';
+import { API } from '../lib/api';
 
 type Period = 'MONTHLY' | 'WEEKLY';
 

@@ -1,8 +1,7 @@
 import { useState, useEffect, useContext } from 'react';
 import { AuthContext } from '../contexts/AuthContext';
 import '../styles/faq.css';
-
-const API = 'http://localhost:8000/api/v1';
+import { API } from '../lib/api';
 
 const CATEGORIES = ['Visa & Work', 'Banking', 'Taxes', 'Financial Planning', 'Campus Life', 'General'];
 
