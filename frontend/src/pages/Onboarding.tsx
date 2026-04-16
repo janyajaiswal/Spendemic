@@ -1,5 +1,4 @@
 import { useState, useContext } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import '../styles/onboarding.css';
 import { API } from '../lib/api';
@@ -44,7 +43,6 @@ const TOTAL_STEPS = 8;
 
 export default function Onboarding() {
   const { user, loginDirect } = useContext(AuthContext)!;
-  const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [data, setData] = useState<OnboardingData>({ ...EMPTY, name: user?.name || '' });
@@ -103,8 +101,9 @@ export default function Onboarding() {
     });
 
     setSaving(false);
-    if (user) loginDirect({ ...user, onboarding_completed: true });
-    navigate('/dashboard');
+    const updated = { ...user!, onboarding_completed: true };
+    loginDirect(updated);
+    window.location.href = '/dashboard';
   };
 
   const slideClass = direction === 'forward' ? 'onboarding-slide' : 'onboarding-slide-back';
@@ -299,8 +298,10 @@ export default function Onboarding() {
           )}
 
           <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            {step < TOTAL_STEPS - 1 && step > 0 && (
-              <button className="onboarding-btn-skip" onClick={skip}>Skip</button>
+            {step < TOTAL_STEPS - 1 && (
+              <button className="onboarding-btn-skip" onClick={finish} disabled={saving}>
+                Skip Setup
+              </button>
             )}
             {step < TOTAL_STEPS - 1 ? (
               <button className="onboarding-btn-next" onClick={next}>Next →</button>
