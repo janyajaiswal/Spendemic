@@ -10,7 +10,7 @@ import {
 } from 'recharts';
 import { TrendingUp, GraduationCap, AlertTriangle, Info, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { API, FORECAST_API } from '../lib/api';
+import { API } from '../lib/api';
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function monthLabel(year: number, month: number) {
@@ -121,8 +121,8 @@ export default function Reports() {
     setError(null);
     try {
       const url = granularity === 'weekly'
-        ? `${FORECAST_API}/forecast?granularity=weekly&prediction_weeks=${predWeeks}`
-        : `${FORECAST_API}/forecast?granularity=monthly&prediction_months=${predMonths}`;
+        ? `${API}/forecast?granularity=weekly&prediction_weeks=${predWeeks}`
+        : `${API}/forecast?granularity=monthly&prediction_months=${predMonths}`;
       const res = await fetch(url, { headers });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -131,11 +131,7 @@ export default function Reports() {
       setForecast(await res.json());
     } catch (e) {
       const msg = e instanceof Error ? e.message : '';
-      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
-        setError('AI forecasting runs on your local machine. Start your local server to see predictions.');
-      } else {
-        setError(msg || 'Failed to load forecast');
-      }
+      setError(msg || 'Failed to load forecast. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -143,9 +139,9 @@ export default function Reports() {
 
   const fetchGradForecast = useCallback(async () => {
     try {
-      const res = await fetch(`${FORECAST_API}/forecast/to-graduation`, { headers });
+      const res = await fetch(`${API}/forecast/to-graduation`, { headers });
       if (res.ok) setGradForecast(await res.json());
-    } catch { /* local server offline or graduation date not set — silently skip */ }
+    } catch { /* graduation date not set — silently skip */ }
   }, [user?.accessToken]);
 
   const fetchWeeklySummary = useCallback(async () => {

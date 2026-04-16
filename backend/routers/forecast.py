@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import sys
+import math
 from datetime import date
 from typing import Literal
 
@@ -151,25 +152,88 @@ def forecast_to_graduation(
 # Shared execution — called by all three endpoints
 # ---------------------------------------------------------------------------
 
+def _statistical_forecast(history: list[float], future_covariates: list[dict], n: int) -> list[dict]:
+    """
+    Lightweight fallback when Chronos-2 / torch is unavailable (e.g. Render free tier).
+    Uses exponential smoothing + linear trend. Returns same shape as chronos_model.forecast.
+    """
+    if not history:
+        base = 500.0
+        std = 100.0
+    else:
+        # Exponential smoothing (alpha=0.35 — more weight on recent months)
+        alpha = 0.35
+        smoothed = float(history[0])
+        for v in history[1:]:
+            smoothed = alpha * float(v) + (1 - alpha) * smoothed
+
+        # Linear trend via simple two-point comparison (last third vs first third)
+        k = max(1, len(history) // 3)
+        early_avg = sum(history[:k]) / k
+        late_avg = sum(history[-k:]) / k
+        slope = (late_avg - early_avg) / max(k, 1)
+
+        # Clamp runaway trends to ±10% of baseline per month
+        slope = max(-smoothed * 0.10, min(smoothed * 0.10, slope))
+
+        std = math.sqrt(sum((v - smoothed) ** 2 for v in history) / max(len(history), 1))
+        std = max(std, smoothed * 0.08)  # at least 8% uncertainty
+
+        predictions = []
+        for i in range(n):
+            cov = future_covariates[i] if i < len(future_covariates) else {}
+            pred = max(0.0, smoothed + slope * (i + 1))
+            # Covariate boost: if rent is explicitly set and differs from implied baseline,
+            # nudge prediction — but only by the delta, not the full rent amount.
+            rent = float(cov.get("rent", 0))
+            food = float(cov.get("food_estimate", 0))
+            explicit_floor = rent + food
+            if explicit_floor > 0 and explicit_floor > pred:
+                pred = pred * 0.4 + explicit_floor * 0.6
+            margin = std * (1 + i * 0.05)  # widen uncertainty further out
+            predictions.append({
+                "month_offset": i + 1,
+                "median": round(pred, 2),
+                "lower":  round(max(0.0, pred - margin), 2),
+                "upper":  round(pred + margin, 2),
+            })
+        return predictions
+
+    # Cold-start with no history
+    predictions = []
+    for i in range(n):
+        cov = future_covariates[i] if i < len(future_covariates) else {}
+        pred = max(base, float(cov.get("rent", 0)) + float(cov.get("food_estimate", 0)))
+        predictions.append({
+            "month_offset": i + 1,
+            "median": round(pred, 2),
+            "lower":  round(max(0.0, pred - std), 2),
+            "upper":  round(pred + std, 2),
+        })
+    return predictions
+
+
 def _execute(history, monthly_labels, future_covariates, next_months, prediction_months, cold_start, graduation_date=None) -> dict:
-    if chronos_model is None:
-        raise HTTPException(status_code=503, detail="AI forecasting is unavailable on this server. Run the local backend to use this feature.")
-    ok, msg = chronos_model.has_enough_data(history)
-    if not ok:
-        raise HTTPException(status_code=422, detail=msg)
-    if chronos_model._PIPELINE is None:
-        raise HTTPException(status_code=503, detail="ML model is still loading — try again in a few seconds.")
-    try:
-        predictions = chronos_model.forecast(history=history, future_covariates=future_covariates, prediction_months=prediction_months)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    warnings = []
+
+    if chronos_model is not None and chronos_model._PIPELINE is not None:
+        ok, msg = chronos_model.has_enough_data(history)
+        if not ok:
+            raise HTTPException(status_code=422, detail=msg)
+        try:
+            predictions = chronos_model.forecast(history=history, future_covariates=future_covariates, prediction_months=prediction_months)
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+        if msg:
+            warnings.append(msg)
+    else:
+        # Chronos-2 unavailable — use statistical fallback
+        predictions = _statistical_forecast(history, future_covariates, prediction_months)
+        warnings.append("Using statistical forecast (trend + smoothing). AI forecasting with Chronos-2 requires running the local backend.")
 
     for pred, (yr, mo) in zip(predictions, next_months):
         pred["year"], pred["month"] = yr, mo
 
-    warnings = []
-    if msg:
-        warnings.append(msg)
     if cold_start:
         warnings.append("No transaction history yet — forecast anchored on your Forecast Setup data. Accuracy improves once you log real expenses.")
 
