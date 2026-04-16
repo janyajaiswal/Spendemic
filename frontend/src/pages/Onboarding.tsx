@@ -43,7 +43,7 @@ const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'CNY', 'JPY', 'CAD', 'AUD', 'AED
 const TOTAL_STEPS = 8;
 
 export default function Onboarding() {
-  const { user } = useContext(AuthContext)!;
+  const { user, loginDirect } = useContext(AuthContext)!;
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
@@ -103,6 +103,7 @@ export default function Onboarding() {
     });
 
     setSaving(false);
+    if (user) loginDirect({ ...user, onboarding_completed: true });
     navigate('/dashboard');
   };
 
