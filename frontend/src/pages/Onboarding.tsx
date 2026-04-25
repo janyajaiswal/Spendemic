@@ -64,8 +64,6 @@ export default function Onboarding() {
     setStep(s => Math.max(s - 1, 0));
   };
 
-  const skip = () => next();
-
   const finish = async () => {
     setSaving(true);
     const payload: Record<string, unknown> = {
