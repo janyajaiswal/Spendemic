@@ -153,6 +153,12 @@ async def preview_import(
         for r in raw_preview if r
     ][:5]
 
+    if not preview and len(df) > 0:
+        warnings.append(
+            "Couldn't read any sample rows — the file may have been saved incorrectly. "
+            "Try uploading the original CSV file instead of an Excel conversion."
+        )
+
     return {
         "filename": file.filename,
         "total_rows": len(df),
@@ -323,14 +329,31 @@ def _parse_date(val, dayfirst: bool) -> datetime.date | None:
 def _read_file(file: UploadFile) -> pd.DataFrame:
     content = file.file.read()
     fname = (file.filename or "").lower()
-    try:
-        df = pd.read_excel(io.BytesIO(content)) if fname.endswith((".xlsx", ".xls")) else pd.read_csv(io.BytesIO(content))
-    except Exception:
+    is_excel = fname.endswith((".xlsx", ".xls"))
+
+    best: pd.DataFrame | None = None
+
+    def _try(fn):
+        nonlocal best
         try:
-            df = pd.read_csv(io.BytesIO(content), encoding="latin-1")
+            candidate = fn()
+            if best is None or len(candidate.columns) > len(best.columns):
+                best = candidate
         except Exception:
-            df = pd.read_excel(io.BytesIO(content))
-    return df.dropna(how="all").reset_index(drop=True)
+            pass
+
+    if is_excel:
+        _try(lambda: pd.read_excel(io.BytesIO(content)))
+    # Always try CSV — covers .csv files and XLSX files that Excel saved incorrectly
+    # (when all data ends up in a single column because the delimiter wasn't recognised)
+    _try(lambda: pd.read_csv(io.BytesIO(content)))
+    _try(lambda: pd.read_csv(io.BytesIO(content), encoding="latin-1"))
+    if not is_excel:
+        _try(lambda: pd.read_excel(io.BytesIO(content)))
+
+    if best is None:
+        raise ValueError("Could not read file — make sure it is a valid CSV or Excel file.")
+    return best.dropna(how="all").reset_index(drop=True)
 
 
 def _alias_matches(alias: str, norm: str) -> bool:
