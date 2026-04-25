@@ -41,50 +41,71 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (!stored) return null;
     try {
-      return JSON.parse(stored) as GoogleUser;
+      const parsed = JSON.parse(stored) as GoogleUser;
+      // Discard sessions stored without a backend token (old fallback sessions)
+      if (!parsed.accessToken) {
+        localStorage.removeItem(STORAGE_KEY);
+        return null;
+      }
+      return parsed;
     } catch {
       return null;
     }
   });
 
   const login = useCallback(async (credential: string): Promise<void> => {
-    // picture is not stored in DB yet — always pull from local JWT decode
     const localDecoded = decodeGoogleJwt(credential);
 
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ credential }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Backend auth failed with status ${response.status}`);
+    const attemptAuth = async (): Promise<Response> => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 40000); // 40s for Render cold start
+      try {
+        return await fetch(`${API_BASE}/api/v1/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credential }),
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
       }
+    };
 
-      const data = await response.json() as {
-        access_token: string;
-        token_type: string;
-        user: { id: string; email: string; name: string; onboarding_completed: boolean };
-      };
-
-      const googleUser: GoogleUser = {
-        sub: data.user.id,
-        email: data.user.email,
-        name: data.user.name,
-        picture: localDecoded.picture,
-        accessToken: data.access_token,
-        onboarding_completed: data.user.onboarding_completed,
-      };
-
-      setUser(googleUser);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(googleUser));
-    } catch (err) {
-      // Graceful fallback: backend offline → use local decode so dev flow still works
-      console.warn('Backend auth unavailable, using local JWT decode:', err);
-      setUser(localDecoded);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(localDecoded));
+    let response: Response;
+    try {
+      response = await attemptAuth();
+    } catch {
+      // One retry after 3s — handles Render cold-start where first request is dropped
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        response = await attemptAuth();
+      } catch (err) {
+        throw new Error('Could not reach the server. Please wait 30 seconds and try again — the backend may be waking up.');
+      }
     }
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error((body as { detail?: string }).detail ?? `Sign-in failed (${response.status}). Please try again.`);
+    }
+
+    const data = await response.json() as {
+      access_token: string;
+      token_type: string;
+      user: { id: string; email: string; name: string; onboarding_completed: boolean };
+    };
+
+    const googleUser: GoogleUser = {
+      sub: data.user.id,
+      email: data.user.email,
+      name: data.user.name,
+      picture: localDecoded.picture,
+      accessToken: data.access_token,
+      onboarding_completed: data.user.onboarding_completed,
+    };
+
+    setUser(googleUser);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(googleUser));
   }, []);
 
   const loginDirect = useCallback((u: GoogleUser) => {

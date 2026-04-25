@@ -135,9 +135,16 @@ export default function Auth() {
   // ── Google OAuth ──────────────────────────────────────────────────────────
 
   const handleGoogleSuccess = async (response: CredentialResponse): Promise<void> => {
-    if (response.credential) {
+    if (!response.credential) return;
+    setLoading(true);
+    setErrors({});
+    try {
       await login(response.credential);
       navigate('/dashboard');
+    } catch (err) {
+      setErrors({ general: err instanceof Error ? err.message : 'Google sign-in failed. Please try again.' });
+    } finally {
+      setLoading(false);
     }
   };
 
