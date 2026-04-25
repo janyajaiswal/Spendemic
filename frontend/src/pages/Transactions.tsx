@@ -146,6 +146,7 @@ export default function Transactions() {
     preview_rows: Array<Record<string, unknown>>;
     all_columns: string[];
     warnings: string[];
+    date_format?: string;
   }
   interface ImportResult { imported: number; skipped: number; errors: string[]; date_range?: { min: string; max: string } | null; }
   const [importOpen, setImportOpen] = useState(false);
@@ -1227,87 +1228,82 @@ export default function Transactions() {
             {/* Step 2 — Review */}
             {importStep === 'review' && importPreview && (
               <div>
+                {/* File summary */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' }}>
+                  <span style={{ color: 'var(--brand-rose)', opacity: 0.7, fontSize: '0.85em' }}>
+                    {importPreview.total_rows} rows
+                  </span>
+                  {importPreview.date_format && (
+                    <span style={{ background: 'rgba(255,255,255,0.07)', borderRadius: '4px', padding: '2px 8px', fontSize: '0.78em', color: 'var(--brand-rose)', opacity: 0.6 }}>
+                      {importPreview.date_format}
+                    </span>
+                  )}
+                </div>
+
+                {/* Warnings */}
                 {importPreview.warnings.length > 0 && (
-                  <div style={{ background: '#2a1f00', border: '1px solid #7a5a00', borderRadius: '8px', padding: '10px 14px', marginBottom: '16px' }}>
+                  <div style={{ background: '#2a1f00', border: '1px solid #7a5a00', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px' }}>
                     {importPreview.warnings.map((w, i) => (
-                      <p key={i} style={{ color: '#fbbf24', fontSize: '0.82em', margin: i === 0 ? 0 : '6px 0 0' }}>⚠ {w}</p>
+                      <p key={i} style={{ color: '#fbbf24', fontSize: '0.82em', margin: i === 0 ? 0 : '4px 0 0' }}>⚠ {w}</p>
                     ))}
                   </div>
                 )}
 
-                {/* Detected column map */}
-                <p style={{ color: 'var(--brand-rose)', opacity: 0.65, fontSize: '0.82em', marginBottom: '8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Column Mapping
-                </p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '20px' }}>
-                  {['date', 'amount', 'debit', 'credit', 'description', 'category', 'currency', 'type'].map(field => (
-                    <div key={field} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
-                      <label style={{ ...s.label, fontSize: '0.75em' }}>{field}</label>
-                      <select style={{ ...s.input, fontSize: '0.82em', padding: '5px 8px' }}
-                        value={importColMap[field] ?? ''}
-                        onChange={e => setImportColMap(m => ({ ...m, [field]: e.target.value }))}>
-                        <option value="">— not mapped —</option>
-                        {importPreview.all_columns.map(col => <option key={col} value={col}>{col}</option>)}
-                      </select>
-                    </div>
+                {/* Detected columns chips */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '16px' }}>
+                  {Object.keys(importPreview.detected_columns).map(field => (
+                    <span key={field} style={{ background: 'rgba(45,212,191,0.12)', border: '1px solid rgba(45,212,191,0.3)', borderRadius: '20px', padding: '3px 10px', fontSize: '0.78em', color: '#2dd4bf' }}>
+                      {field} ✓
+                    </span>
+                  ))}
+                  {importPreview.undetected.filter(f => !['currency', 'category'].includes(f)).map(field => (
+                    <span key={field} style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.3)', borderRadius: '20px', padding: '3px 10px', fontSize: '0.78em', color: '#f87171' }}>
+                      {field} —
+                    </span>
                   ))}
                 </div>
 
-                {/* Defaults for undetected */}
+                {/* Preview table */}
+                {importPreview.preview_rows.length > 0 ? (
+                  <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)', marginBottom: '14px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8em' }}>
+                      <thead>
+                        <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
+                          {['date', 'amount', 'type', 'category', 'description'].map(h => (
+                            <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--brand-rose)', opacity: 0.55, fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreview.preview_rows.map((row, i) => (
+                          <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                            {['date', 'amount', 'type', 'category', 'description'].map(h => (
+                              <td key={h} style={{ padding: '6px 10px', color: 'var(--brand-rose)', opacity: 0.8, maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {String(row[h] ?? '—')}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p style={{ color: 'var(--brand-rose)', opacity: 0.4, fontSize: '0.82em', marginBottom: '14px' }}>
+                    Couldn't preview rows — check that your file has valid dates and amounts.
+                  </p>
+                )}
+
+                {/* Defaults for undetected optional fields */}
                 {importPreview.undetected.includes('currency') && (
-                  <div style={s.formGroup}>
-                    <label style={s.label}>Default currency for unmapped rows</label>
+                  <div style={{ ...s.formGroup, marginBottom: '10px' }}>
+                    <label style={s.label}>Default currency</label>
                     <select style={s.input} value={importDefCurrency} onChange={e => setImportDefCurrency(e.target.value)}>
                       {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                 )}
-                {importPreview.undetected.includes('category') && (
-                  <div style={s.formGroup}>
-                    <label style={s.label}>Default category when description can't be matched</label>
-                    <select style={s.input} value={importDefCategory} onChange={e => setImportDefCategory(e.target.value)}>
-                      {[...INCOME_CATS, ...EXPENSE_CATS].filter((v, i, a) => a.indexOf(v) === i).map(c => (
-                        <option key={c} value={c}>{CAT_LABEL[c]}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
 
-                {/* Preview table */}
-                {importPreview.preview_rows.length > 0 && (
-                  <>
-                    <p style={{ color: 'var(--brand-rose)', opacity: 0.65, fontSize: '0.82em', margin: '16px 0 8px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Preview (first {importPreview.preview_rows.length} rows)
-                    </p>
-                    <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8em' }}>
-                        <thead>
-                          <tr style={{ background: 'rgba(255,255,255,0.05)' }}>
-                            {['date', 'amount', 'type', 'category', 'currency', 'description'].map(h => (
-                              <th key={h} style={{ padding: '6px 10px', textAlign: 'left', color: 'var(--brand-rose)', opacity: 0.55, fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {importPreview.preview_rows.map((row, i) => (
-                            <tr key={i} style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                              {['date', 'amount', 'type', 'category', 'currency', 'description'].map(h => (
-                                <td key={h} style={{ padding: '6px 10px', color: 'var(--brand-rose)', opacity: 0.8, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {String(row[h] ?? '—')}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    <p style={{ color: 'var(--brand-rose)', opacity: 0.4, fontSize: '0.78em', marginTop: '6px' }}>
-                      {importPreview.total_rows} total rows will be imported
-                    </p>
-                  </>
-                )}
-
-                <div style={{ ...s.modalFooter, marginTop: '20px' }}>
+                <div style={{ ...s.modalFooter, marginTop: '16px' }}>
                   <button style={s.cancelBtn} onClick={() => setImportStep('upload')}>Back</button>
                   <button style={s.saveBtn} onClick={handleImportConfirm} disabled={importLoading || !importColMap['date']}>
                     {importLoading ? 'Importing…' : `Import ${importPreview.total_rows} rows`}

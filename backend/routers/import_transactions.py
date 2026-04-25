@@ -10,6 +10,7 @@ import io
 import json
 import os
 import re
+import datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -139,9 +140,18 @@ async def preview_import(
     if "type" in undetected and not detected.get("debit") and not detected.get("credit"):
         warnings.append("No transaction type column — positive amounts = Income, negative = Expense.")
 
-    raw_preview = [_parse_row(row, detected) for _, row in df.head(8).iterrows()]
+    date_col_name = detected.get("date")
+    dayfirst = _detect_dayfirst(df[date_col_name]) if date_col_name else False
+    if dayfirst:
+        warnings.append("Dates look like DD/MM/YYYY — importing with day-first format.")
+
+    raw_preview = [_parse_row(row, detected, dayfirst=dayfirst) for _, row in df.head(8).iterrows()]
     _apply_llm_categories(raw_preview, CategoryEnum.OTHER)
-    preview = [r for r in raw_preview if r][:5]
+    preview = [
+        {k: str(v) if isinstance(v, (datetime.date, datetime.datetime)) else v
+         for k, v in r.items() if not k.startswith('_')}
+        for r in raw_preview if r
+    ][:5]
 
     return {
         "filename": file.filename,
@@ -151,6 +161,7 @@ async def preview_import(
         "preview_rows": preview,
         "all_columns": list(df.columns),
         "warnings": warnings,
+        "date_format": "DD/MM/YYYY" if dayfirst else "MM/DD/YYYY",
     }
 
 
@@ -191,10 +202,13 @@ async def confirm_import(
         "category": category_col, "currency": currency_col, "type": type_col,
     }
 
+    # Detect date format once for the whole file
+    dayfirst = _detect_dayfirst(df[date_col]) if date_col else False
+
     # Parse all rows with keyword matching, then upgrade ambiguous categories via LLM
     all_rows = list(df.iterrows())
     parsed_rows: list[dict | None] = [
-        _parse_row(row, col_map, def_currency, def_category)
+        _parse_row(row, col_map, def_currency, def_category, dayfirst=dayfirst)
         for _, row in all_rows
     ]
     _apply_llm_categories(parsed_rows, def_category)
@@ -239,6 +253,72 @@ async def confirm_import(
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _detect_dayfirst(date_series: pd.Series) -> bool:
+    """
+    Scan the date column to determine whether day comes first (DD/MM/YYYY).
+
+    Strategy:
+    - If any value has a first component > 12, it can only be a day → day-first.
+    - If any value has a second component > 12, it can only be a day → month-first (US).
+    - If values are already datetime objects (Excel auto-parsed), trust pandas → not day-first.
+    - Majority vote wins; defaults to False (US) when truly ambiguous.
+    """
+    dayfirst_votes = 0
+    monthfirst_votes = 0
+
+    for val in date_series.dropna():
+        # Already a proper datetime — pandas/Excel parsed it correctly
+        if isinstance(val, (pd.Timestamp, datetime.date, datetime.datetime)):
+            return False
+
+        s = str(val).strip()
+        # Split on common separators: / - .
+        parts = re.split(r'[/\-\.]', s)
+        if len(parts) < 2:
+            continue
+        try:
+            a, b = int(parts[0]), int(parts[1])
+        except ValueError:
+            continue
+
+        if a > 12:
+            dayfirst_votes += 1   # first component can't be a month → day-first
+        elif b > 12:
+            monthfirst_votes += 1  # second component can't be a month → month is first
+
+    return dayfirst_votes > monthfirst_votes
+
+
+def _parse_date(val, dayfirst: bool) -> datetime.date | None:
+    """Parse a date value using the detected format. Falls back through multiple strategies."""
+    if _isna(val):
+        return None
+    # Already a datetime-like object
+    if isinstance(val, (pd.Timestamp, datetime.datetime)):
+        return val.date()
+    if isinstance(val, datetime.date):
+        return val
+    s = str(val).strip()
+    if not s:
+        return None
+    # Try pandas with the detected dayfirst setting
+    try:
+        return pd.to_datetime(s, dayfirst=dayfirst).date()
+    except Exception:
+        pass
+    # Try dateutil as a fallback (more permissive)
+    try:
+        from dateutil import parser as du_parser
+        return du_parser.parse(s, dayfirst=dayfirst).date()
+    except Exception:
+        pass
+    # Last resort: pandas without dayfirst hint
+    try:
+        return pd.to_datetime(s).date()
+    except Exception:
+        return None
+
 
 def _read_file(file: UploadFile) -> pd.DataFrame:
     content = file.file.read()
@@ -288,14 +368,14 @@ def _parse_row(
     col_map: dict,
     default_currency: CurrencyEnum = CurrencyEnum.USD,
     default_category: CategoryEnum = CategoryEnum.OTHER,
+    dayfirst: bool = False,
 ) -> dict | None:
     # Date (required)
     date_col = col_map.get("date")
     if not date_col or _isna(row.get(date_col)):
         return None
-    try:
-        tx_date = pd.to_datetime(row[date_col]).date()
-    except Exception:
+    tx_date = _parse_date(row[date_col], dayfirst)
+    if tx_date is None:
         return None
 
     # Description (early — needed for category/type inference)
