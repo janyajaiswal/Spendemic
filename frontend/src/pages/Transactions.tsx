@@ -155,7 +155,7 @@ export default function Transactions() {
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [importColMap, setImportColMap] = useState<Record<string, string>>({});
   const [importDefCurrency, setImportDefCurrency] = useState('USD');
-  const [importDefCategory, setImportDefCategory] = useState('OTHER');
+  const [importDefCategory] = useState('OTHER');
   const [importLoading, setImportLoading] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
