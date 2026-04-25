@@ -556,7 +556,22 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
         weekly_covariates.append(cov)
 
     if chronos_model is None:
-        raise HTTPException(status_code=503, detail="AI forecasting is unavailable on this server. Run the local backend to use this feature.")
+        predictions = _statistical_forecast(history, weekly_covariates, prediction_weeks)
+        for pred, (iso_yr, iso_wk) in zip(predictions, next_weeks):
+            pred["year"] = iso_yr
+            pred["week"] = iso_wk
+        return {
+            "history": [
+                {"year": y, "week": w, "total": round(t, 2), "synthetic": cold_start and i == len(weekly_labels) - 1}
+                for i, ((y, w), t) in enumerate(zip(weekly_labels, history))
+            ],
+            "predictions": predictions,
+            "prediction_weeks": prediction_weeks,
+            "granularity": "weekly",
+            "graduation_date": None,
+            "warnings": ["Using statistical forecast (trend + smoothing). Chronos-2 requires the local backend."],
+            "missing_fields": [],
+        }
     ok, msg = chronos_model.has_enough_data(history)
     if not ok:
         raise HTTPException(status_code=422, detail=msg)
