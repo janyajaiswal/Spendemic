@@ -3,6 +3,7 @@ Alerts router — computed in-app notifications from budget utilization.
 GET /api/v1/alerts  returns alerts for budgets at ≥80% or ≥100% spend.
 No writes needed: alerts are derived on-the-fly from live budget data.
 """
+from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 

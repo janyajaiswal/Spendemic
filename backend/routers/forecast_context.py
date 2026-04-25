@@ -8,6 +8,7 @@ GET  /api/v1/forecast-context/{y}/{m}  → get a specific month (404 if none)
 PUT  /api/v1/forecast-context/{y}/{m}  → upsert a month's covariates
 POST /api/v1/forecast-context/bulk-copy → copy one month's values to many months
 """
+from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.orm import Session
 

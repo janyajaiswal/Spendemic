@@ -2,6 +2,7 @@
 AI Financial Planner - User Management API Endpoints
 CRUD operations for user management
 """
+from __future__ import annotations
 import json
 import math
 import uuid as uuid_lib
@@ -370,7 +371,7 @@ async def update_user(
 
 @router.delete(
     "/{user_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
+    status_code=200,
     summary="Delete user",
     description="Permanently delete a user account"
 )

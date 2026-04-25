@@ -2,6 +2,7 @@
 AI Financial Planner - Authentication Endpoints
 Google OAuth verification, email/password registration with OTP, and sign-in.
 """
+from __future__ import annotations
 import os
 import uuid
 import secrets
@@ -406,7 +407,7 @@ async def signin(
     )
 
 
-@router.post("/logout", status_code=204)
+@router.post("/logout", status_code=200)
 async def logout(
     request: Request,
     db: Session = Depends(get_db),

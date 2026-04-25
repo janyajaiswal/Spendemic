@@ -2,6 +2,7 @@
 Budgets router — CRUD + spend tracking per category.
 All endpoints require a valid JWT (Bearer token).
 """
+from __future__ import annotations
 import csv
 import io
 from datetime import date
@@ -129,7 +130,7 @@ def update_budget(
     return _enrich(b, db)
 
 
-@router.delete("/{budget_id}", status_code=204)
+@router.delete("/{budget_id}", status_code=200)
 def delete_budget(
     budget_id: UUID,
     current_user=Depends(get_current_user),

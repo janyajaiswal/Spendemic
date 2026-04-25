@@ -2,6 +2,7 @@
 Transactions router — CRUD + monthly summary.
 All endpoints require a valid JWT (Bearer token).
 """
+from __future__ import annotations
 import csv
 import io
 import os
@@ -355,7 +356,7 @@ def delete_all_transactions(
     return {"deleted": deleted}
 
 
-@router.delete("/{transaction_id}", status_code=204)
+@router.delete("/{transaction_id}", status_code=200)
 def delete_transaction(
     transaction_id: UUID,
     current_user=Depends(get_current_user),

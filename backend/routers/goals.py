@@ -123,7 +123,7 @@ def fund_goal(
     return _to_response(goal)
 
 
-@router.delete("/{goal_id}", status_code=204)
+@router.delete("/{goal_id}", status_code=200)
 def delete_goal(
     goal_id: str,
     current_user=Depends(get_current_user),

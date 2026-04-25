@@ -82,7 +82,7 @@ def update_job(
     return _to_response(job)
 
 
-@router.delete("/{job_id}", status_code=204)
+@router.delete("/{job_id}", status_code=200)
 def delete_job(
     job_id: str,
     current_user=Depends(get_current_user),
