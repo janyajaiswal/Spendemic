@@ -115,6 +115,7 @@ export default function Reports() {
   const [loanProjection, setLoanProjection] = useState<LoanProjection | null>(null);
 
   const headers: HeadersInit = { Authorization: `Bearer ${user?.accessToken ?? ''}` };
+  const forecastHeaders: HeadersInit = { ...headers, 'ngrok-skip-browser-warning': 'true' };
 
   const fetchForecast = useCallback(async () => {
     setLoading(true);
@@ -123,7 +124,7 @@ export default function Reports() {
       const url = granularity === 'weekly'
         ? `${FORECAST_API}/forecast?granularity=weekly&prediction_weeks=${predWeeks}`
         : `${FORECAST_API}/forecast?granularity=monthly&prediction_months=${predMonths}`;
-      const res = await fetch(url, { headers });
+      const res = await fetch(url, { headers: forecastHeaders });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error((body as any).detail ?? `Error ${res.status}`);
@@ -139,7 +140,7 @@ export default function Reports() {
 
   const fetchGradForecast = useCallback(async () => {
     try {
-      const res = await fetch(`${FORECAST_API}/forecast/to-graduation`, { headers });
+      const res = await fetch(`${FORECAST_API}/forecast/to-graduation`, { headers: forecastHeaders });
       if (res.ok) setGradForecast(await res.json());
     } catch { /* graduation date not set — silently skip */ }
   }, [user?.accessToken]);
