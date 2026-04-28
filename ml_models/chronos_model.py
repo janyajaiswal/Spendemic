@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import sys
 import warnings
+from datetime import date, timedelta
 from typing import Any
 
 import numpy as np
@@ -333,55 +334,105 @@ def _apply_covariates_weekly(
 ) -> list[float]:
     """
     Encode per-week covariates as anchor points appended to history.
-    All dollar amounts in weekly_covariates are assumed to already be
-    divided by 4.33 (done by the caller in _run_from_db_weekly).
 
-    Weekly heuristic weights (proportional to monthly weights / (52/12)):
-      travel_home         → +$276.92 one-off spike (1 200 / (52/12))
-      tuition_due         → added directly (already weekly-scaled)
-      scholarship_received→ subtracted
-      income_amount       → −$0.08 × income capped at $69.23/wk (300 / (52/12))
-      is_working          → −$34.62 proxy if no income_amount (150 / (52/12))
-      is_summer_break     → −max(69.23, base×0.15)/wk  (scales with user's spending)
-      is_winter_break     → −max(46.15, base×0.10)/wk
-      health_insurance    → +$34.62/wk  (150 / (52/12))
-      hours_per_week      → −$1.85/hr above 10 h/wk  (8 / (52/12))
-      rent / food / utils → added directly (already weekly-scaled)
+    Most dollar amounts in weekly_covariates are pre-divided by 4.33 by the
+    caller, EXCEPT rent which is passed as rent_monthly (full monthly amount)
+    so this function can apply it only on the actual rent-payment week.
+
+    Improvements over v1:
+    - Recency-weighted base (EWA of last 4 weeks, not just last[−1])
+    - Rent applied as full monthly amount on the week containing the 1st of
+      the month; $0 on all other weeks (matches real payment pattern)
+    - Break transition smoothing: blends the cliff week when is_summer_break
+      or is_winter_break changes, avoiding an abrupt anchor spike
     """
     if not weekly_covariates:
         return history
 
-    base = history[-1] if history else round(1000.0 / _WEEKS_PER_MONTH, 2)  # 230.77
+    # Recency-weighted base: EWA of last 4 weeks (most recent gets weight 0.4)
+    if history:
+        recent = history[-4:]
+        weights_raw = [0.1, 0.2, 0.3, 0.4][-len(recent):]
+        total_w = sum(weights_raw)
+        base = sum(w * v for w, v in zip(weights_raw, recent)) / total_w
+    else:
+        base = round(1000.0 / _WEEKS_PER_MONTH, 2)
+
     anchors: list[float] = []
 
     for cov in weekly_covariates[:prediction_weeks]:
         delta = 0.0
+
         travel_cost = float(cov.get("travel_cost") or 0)
-        delta += float(cov.get("travel_home", 0)) * (travel_cost if travel_cost > 0 else round(1200.0 / _WEEKS_PER_MONTH, 2))
+        delta += float(cov.get("travel_home", 0)) * (
+            travel_cost if travel_cost > 0 else round(1200.0 / _WEEKS_PER_MONTH, 2)
+        )
+
         delta += float(cov.get("tuition_due", 0))
         delta -= float(cov.get("scholarship_received", 0))
+
         income = float(cov.get("income_amount", 0))
         if income > 0:
-            delta -= min(income * 0.08, round(300.0 / _WEEKS_PER_MONTH, 2))  # ~69.23
+            delta -= min(income * 0.08, round(300.0 / _WEEKS_PER_MONTH, 2))
         else:
             delta -= float(cov.get("is_working", 0)) * round(150.0 / _WEEKS_PER_MONTH, 2)
+
         summer_reduction = max(round(300.0 / _WEEKS_PER_MONTH, 2), base * 0.15)
         delta -= float(cov.get("is_summer_break", 0)) * summer_reduction
         winter_reduction = max(round(200.0 / _WEEKS_PER_MONTH, 2), base * 0.10)
         delta -= float(cov.get("is_winter_break", 0)) * winter_reduction
+
         delta += float(cov.get("health_insurance", 0)) * round(150.0 / _WEEKS_PER_MONTH, 2)
+
         extra_hours = max(float(cov.get("hours_per_week", 10)) - 10, 0)
-        delta -= extra_hours * round(8.0 / _WEEKS_PER_MONTH, 3)  # ~1.846
-        rent = float(cov.get("rent", 0))
-        if rent > 0:
-            delta += rent
+        delta -= extra_hours * round(8.0 / _WEEKS_PER_MONTH, 3)
+
+        # Rent: apply full monthly amount only on the week containing the 1st
+        # of the month; $0 on all other weeks (matches real payment pattern).
+        # Falls back to the pre-divided `rent` value if week labels not available.
+        rent_monthly = float(cov.get("rent_monthly") or 0)
+        if rent_monthly > 0:
+            iso_yr_v = cov.get("iso_yr")
+            iso_wk_v = cov.get("iso_wk")
+            if iso_yr_v is not None and iso_wk_v is not None:
+                delta += rent_monthly if _is_rent_week(int(iso_yr_v), int(iso_wk_v)) else 0.0
+            else:
+                delta += float(cov.get("rent", 0))  # fallback: already-divided weekly value
+        else:
+            delta += float(cov.get("rent", 0))
+
         delta += float(cov.get("food_estimate", 0))
         delta += float(cov.get("utilities_estimate", 0))
+
         rate = float(cov.get("exchange_rate", 1.0))
         adjusted = max((base + delta) * (rate if rate > 0 else 1.0), 0.0)
         anchors.append(round(adjusted, 2))
 
+    # Break transition smoothing: when is_summer_break or is_winter_break changes
+    # between consecutive anchor weeks, blend the transition to avoid a cliff spike.
+    for i in range(1, len(anchors)):
+        if i < len(weekly_covariates):
+            prev_b = (int(weekly_covariates[i - 1].get("is_summer_break", 0)) +
+                      int(weekly_covariates[i - 1].get("is_winter_break", 0)))
+            curr_b = (int(weekly_covariates[i].get("is_summer_break", 0)) +
+                      int(weekly_covariates[i].get("is_winter_break", 0)))
+            if prev_b != curr_b:
+                anchors[i] = round((anchors[i - 1] + anchors[i]) / 2, 2)
+
     return history + anchors
+
+
+def _is_rent_week(iso_year: int, iso_week: int, rent_day: int = 1) -> bool:
+    """Returns True if ISO week `iso_week` of `iso_year` contains `rent_day` day of any month."""
+    try:
+        week_monday = date.fromisocalendar(iso_year, iso_week, 1)
+        for offset in range(7):
+            d = week_monday + timedelta(days=offset)
+            if d.day == rent_day:
+                return True
+    except Exception:
+        pass
+    return False
 
 
 # ---------------------------------------------------------------------------

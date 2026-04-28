@@ -32,19 +32,32 @@ function usd(n: number) {
 // Types
 // ─────────────────────────────────────────────────────
 interface HistoryPoint  { year: number; month?: number; week?: number; total: number; synthetic: boolean }
-interface Prediction    { year: number; month?: number; week?: number; month_offset?: number; week_offset?: number; lower: number; median: number; upper: number }
-interface ForecastResp  { history: HistoryPoint[]; predictions: Prediction[]; prediction_months?: number; prediction_weeks?: number; granularity: string; graduation_date: string | null; warnings: string[] }
+interface PredictionFactors {
+  base: number; rent_added: number; food_added: number; break_reduction: number;
+  health_insurance_added: number; income_reduction: number; travel_added: number;
+  is_rent_week: boolean; post_graduation: boolean;
+}
+interface Prediction    { year: number; month?: number; week?: number; month_offset?: number; week_offset?: number; lower: number; median: number; upper: number; factors?: PredictionFactors }
+interface ModelInfo     { model_used: string; history_points: number; covariates_active: string[]; data_quality: 'good' | 'limited' | 'sparse' }
+interface CovariateSource { amount: number; source: 'user_setup' | 'detected_from_transactions' | 'missing' }
+interface ForecastResp  {
+  history: HistoryPoint[]; predictions: Prediction[]; prediction_months?: number; prediction_weeks?: number;
+  granularity: string; graduation_date: string | null; warnings: string[];
+  missing_fields?: string[]; model_info?: ModelInfo; covariate_sources?: Record<string, CovariateSource>;
+}
 interface WeeklySummaryRow { year: number; week: number; week_start: string; week_end: string; total: number }
 interface LoanMonthPoint { month: number; year: number; remaining: number }
 interface LoanProjection { months_remaining: number; payoff_date: string; monthly_schedule: LoanMonthPoint[] }
 
 interface ChartPoint {
   label: string;
-  actual?:    number;   // historical bar
-  median?:    number;   // forecast line
-  lower?:     number;   // confidence band base (transparent)
-  bandWidth?: number;   // upper - lower (visible band)
-  isForecast: boolean;
+  actual?:      number;   // historical bar
+  median?:      number;   // forecast line
+  lower?:       number;   // confidence band base (transparent)
+  bandWidth?:   number;   // upper - lower (visible band)
+  rollingAvg?:  number;   // 4-week rolling average of history
+  isForecast:   boolean;
+  factors?:     PredictionFactors;
 }
 
 // ─────────────────────────────────────────────────────
@@ -58,12 +71,13 @@ function ForecastTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as ChartPoint;
   const light = isLight();
+  const f = (d as any).factors as PredictionFactors | undefined;
   return (
     <div style={{
       background: light ? '#fff' : '#0d3533',
       border: `1px solid ${light ? 'rgba(14,76,73,0.18)' : 'rgba(255,227,180,0.15)'}`,
       borderRadius: 8, padding: '10px 14px', fontSize: 13,
-      boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+      boxShadow: '0 4px 16px rgba(0,0,0,0.12)', maxWidth: 240,
     }}>
       <div style={{ color: light ? '#0e4c49' : '#ffe3b4', fontWeight: 700, marginBottom: 6 }}>{label}</div>
       {d.actual != null && (
@@ -75,6 +89,16 @@ function ForecastTooltip({ active, payload, label }: any) {
           {d.lower != null && d.bandWidth != null && (
             <div style={{ color: light ? 'rgba(14,76,73,0.55)' : 'rgba(236,199,176,0.55)', fontSize: 11 }}>
               Range: {usd(d.lower)} – {usd(d.lower + d.bandWidth)}
+            </div>
+          )}
+          {f && (
+            <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${light ? 'rgba(14,76,73,0.1)' : 'rgba(255,227,180,0.1)'}`, fontSize: 11, color: light ? 'rgba(14,76,73,0.6)' : 'rgba(236,199,176,0.6)' }}>
+              {f.is_rent_week && <div>Rent payment week: +{usd(f.rent_added)}</div>}
+              {f.food_added > 0 && <div>Food: +{usd(f.food_added)}</div>}
+              {f.health_insurance_added > 0 && <div>Health insurance: +{usd(f.health_insurance_added)}</div>}
+              {f.break_reduction < 0 && <div>Break reduction: {usd(f.break_reduction)}</div>}
+              {f.income_reduction < 0 && <div>Income offset: {usd(f.income_reduction)}</div>}
+              {f.post_graduation && <div style={{ color: '#2dd4bf' }}>Post-graduation period</div>}
             </div>
           )}
         </>
@@ -165,13 +189,20 @@ export default function Reports() {
     }
   }, [granularity, predMonths, predWeeks, fetchForecast, fetchGradForecast, fetchWeeklySummary]);
 
+  // ── Rolling average (4-period window over history) ──
+  const rollingAvgData: number[] = forecast?.history.map((_, i, arr) => {
+    const window = arr.slice(Math.max(0, i - 3), i + 1);
+    return Math.round(window.reduce((s, h) => s + h.total, 0) / window.length);
+  }) ?? [];
+
   // ── Build combined chart data ──────────────────────
   const chartData: ChartPoint[] = forecast ? [
-    ...forecast.history.map(h => ({
+    ...forecast.history.map((h, i) => ({
       label: granularity === 'weekly' && h.week != null
         ? weekLabel(h.year, h.week)
         : monthLabel(h.year, h.month ?? 1),
       actual: h.total,
+      rollingAvg: rollingAvgData[i],
       isForecast: false,
     })),
     ...forecast.predictions.map(p => ({
@@ -182,6 +213,7 @@ export default function Reports() {
       lower:     p.lower,
       bandWidth: p.upper - p.lower,
       isForecast: true,
+      factors:   p.factors,
     })),
   ] : [];
 
@@ -330,7 +362,7 @@ export default function Reports() {
               {granularity === 'weekly' ? 'Weekly' : 'Monthly'} Spending — History & Forecast
             </div>
             <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', marginTop: 2, opacity: 0.6 }}>
-              Gray bars = actual · Cream line = forecast median · Shaded band = confidence interval
+              Gray bars = actual · Orange dashed = 4-period avg · Cream line = forecast median · Shaded = confidence band
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -430,6 +462,16 @@ export default function Reports() {
                 />
 
                 <Line
+                  dataKey="rollingAvg"
+                  name="4-period avg"
+                  stroke={light ? '#f59e0b' : '#fb923c'}
+                  strokeWidth={1.5}
+                  strokeDasharray="3 3"
+                  dot={false}
+                  activeDot={false}
+                  connectNulls
+                />
+                <Line
                   dataKey="median"
                   name="Forecast median"
                   stroke={lineStroke}
@@ -444,6 +486,118 @@ export default function Reports() {
           );
         })()}
       </Card>
+
+      {/* ── Missing fields card ── */}
+      {forecast?.missing_fields && forecast.missing_fields.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          background: 'rgba(14,76,73,0.07)', border: '1px solid rgba(14,76,73,0.2)',
+          borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: '0.83em',
+          color: 'var(--text-secondary)',
+        }}>
+          <Info size={15} style={{ marginTop: 1, flexShrink: 0, color: 'var(--accent)' }} />
+          <span>
+            <b style={{ color: 'var(--text-primary)' }}>Improve forecast accuracy</b> — add these in Forecast Setup:{' '}
+            {forecast.missing_fields.join(', ')}.
+          </span>
+        </div>
+      )}
+
+      {/* ── Forecast Explanation Panel ── */}
+      {forecast && !loading && forecast.predictions.length > 0 && (() => {
+        const peak = forecast.predictions.reduce((m, p) => p.median > m.median ? p : m, forecast.predictions[0]);
+        const peakLabel = granularity === 'weekly' && peak.week != null
+          ? weekLabel(peak.year, peak.week)
+          : monthLabel(peak.year, peak.month ?? 1);
+        const f = peak.factors;
+        const mi = forecast.model_info;
+        const cs = forecast.covariate_sources;
+        const qualityColor = mi?.data_quality === 'good' ? '#2dd4bf' : mi?.data_quality === 'limited' ? '#f59e0b' : '#f87171';
+        const qualityLabel = mi?.data_quality === 'good' ? `Good (${mi.history_points} weeks)` : mi?.data_quality === 'limited' ? `Limited (${mi.history_points} weeks — log more)` : `Sparse (${mi?.history_points ?? 0} weeks)`;
+
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
+            {/* Factor breakdown for peak week */}
+            <Card>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10, opacity: 0.6 }}>
+                Why {peakLabel} is the peak
+              </div>
+              {mi && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                  <span style={{ fontSize: '0.75em', color: 'var(--text-muted)', opacity: 0.65 }}>{mi.model_used}</span>
+                  <span style={{ fontSize: '0.75em', color: qualityColor, background: `${qualityColor}18`, borderRadius: 99, padding: '1px 8px' }}>
+                    {qualityLabel}
+                  </span>
+                </div>
+              )}
+              {f ? (
+                <div style={{ fontSize: '0.83em' }}>
+                  {[
+                    { label: 'Baseline (recent avg)', val: f.base, sign: '' },
+                    f.rent_added > 0 ? { label: f.is_rent_week ? 'Rent payment week' : 'Rent (weekly share)', val: f.rent_added, sign: '+' } : null,
+                    f.food_added > 0 ? { label: 'Food', val: f.food_added, sign: '+' } : null,
+                    f.health_insurance_added > 0 ? { label: 'Health insurance', val: f.health_insurance_added, sign: '+' } : null,
+                    f.break_reduction < 0 ? { label: 'Break reduction', val: f.break_reduction, sign: '' } : null,
+                    f.income_reduction < 0 ? { label: 'Income offset', val: f.income_reduction, sign: '' } : null,
+                    f.travel_added > 0 ? { label: 'Travel', val: f.travel_added, sign: '+' } : null,
+                  ].filter(Boolean).map((row, i) => row && (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid var(--border)', color: i === 0 ? 'var(--text-primary)' : row.val < 0 ? '#2dd4bf' : 'var(--text-secondary)' }}>
+                      <span>{row.label}</span>
+                      <span style={{ fontWeight: 600 }}>{row.sign}{usd(Math.abs(row.val))}/wk</span>
+                    </div>
+                  ))}
+                  {f.post_graduation && (
+                    <div style={{ marginTop: 6, fontSize: '0.82em', color: '#2dd4bf' }}>
+                      Post-graduation — university costs removed
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
+                    <span>Forecast</span>
+                    <span>{usd(peak.median)}/wk</span>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.83em', opacity: 0.55 }}>
+                  Run a forecast to see the breakdown.
+                </div>
+              )}
+            </Card>
+
+            {/* Data sources panel */}
+            <Card>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10, opacity: 0.6 }}>
+                Where your data comes from
+              </div>
+              {cs ? (
+                <div style={{ fontSize: '0.83em' }}>
+                  {Object.entries(cs).map(([field, info]) => {
+                    const labels: Record<string, string> = {
+                      rent: 'Rent', food_estimate: 'Food', utilities_estimate: 'Utilities',
+                      tuition_due: 'Tuition', scholarship_received: 'Scholarship',
+                      exchange_rate: 'Exchange rate', hourly_rate: 'Hourly rate',
+                    };
+                    const srcColor = info.source === 'user_setup' ? '#2dd4bf' : info.source === 'detected_from_transactions' ? '#f59e0b' : '#f87171';
+                    const srcText = info.source === 'user_setup' ? 'Forecast Setup ✓' : info.source === 'detected_from_transactions' ? 'auto-detected ✓' : 'missing';
+                    return (
+                      <div key={field} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
+                        <span style={{ color: 'var(--text-secondary)' }}>{labels[field] ?? field}</span>
+                        <div style={{ textAlign: 'right' }}>
+                          {info.amount > 0 && <span style={{ color: 'var(--text-primary)', fontWeight: 600, marginRight: 6 }}>{usd(info.amount)}/mo</span>}
+                          <span style={{ fontSize: '0.78em', color: srcColor, background: `${srcColor}18`, borderRadius: 99, padding: '1px 7px' }}>{srcText}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.83em', opacity: 0.55 }}>
+                  Fill in Forecast Setup to see data sources.
+                </div>
+              )}
+            </Card>
+          </div>
+        );
+      })()}
 
       {/* ── Graduation Forecast Card ── */}
       {gradForecast && gradMonths > 0 && (
@@ -489,18 +643,30 @@ export default function Reports() {
               <tbody>
                 {(() => {
                   const avg = weeklySummary.reduce((s, w) => s + w.total, 0) / weeklySummary.length;
+                  const stdDev = Math.sqrt(weeklySummary.reduce((s, w) => s + (w.total - avg) ** 2, 0) / weeklySummary.length);
                   const maxT = Math.max(...weeklySummary.map(w => w.total));
+                  const fmtDate = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                   return [...weeklySummary].reverse().map((w, i) => {
                     const pct = avg > 0 ? ((w.total - avg) / avg) * 100 : 0;
                     const barW = Math.min(Math.abs(w.total / maxT) * 100, 100);
-                    const fmtDate = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    // Flag anomaly weeks: total > 1.5× std above avg
+                    const isAnomaly = w.total > avg + 1.5 * stdDev;
+                    // Flag possible rent weeks: start of month (1st–5th)
+                    const weekStartDay = new Date(w.week_start + 'T00:00:00').getDate();
+                    const isLikelyRentWeek = weekStartDay <= 5;
                     return (
-                      <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '9px 10px', color: 'var(--text-primary)' }}>{weekLabel(w.year, w.week)}</td>
+                      <tr key={i} style={{ borderBottom: '1px solid var(--border)', background: isAnomaly ? 'rgba(251,146,60,0.04)' : undefined }}>
+                        <td style={{ padding: '9px 10px', color: 'var(--text-primary)' }}>
+                          {weekLabel(w.year, w.week)}
+                          {isLikelyRentWeek && <span title="Likely includes rent payment" style={{ marginLeft: 5, fontSize: '0.7em', color: '#f59e0b', opacity: 0.75 }}>🏠</span>}
+                        </td>
                         <td style={{ padding: '9px 10px', color: 'var(--text-secondary)', fontSize: '0.83em', opacity: 0.6 }}>
                           {fmtDate(w.week_start)} – {fmtDate(w.week_end)}
                         </td>
-                        <td style={{ padding: '9px 10px', textAlign: 'right', color: 'var(--text-primary)', fontWeight: 600 }}>{usd(w.total)}</td>
+                        <td style={{ padding: '9px 10px', textAlign: 'right', color: isAnomaly ? '#fb923c' : 'var(--text-primary)', fontWeight: 600 }}>
+                          {usd(w.total)}
+                          {isAnomaly && <span style={{ marginLeft: 5, fontSize: '0.72em', color: '#fb923c' }}>↑</span>}
+                        </td>
                         <td style={{ padding: '9px 10px', textAlign: 'right', fontSize: '0.8em' }}>
                           <span style={{ color: pct > 0 ? '#f87171' : '#2dd4bf' }}>
                             {pct > 0 ? '+' : ''}{pct.toFixed(1)}%
