@@ -19,7 +19,8 @@ from __future__ import annotations
 import os
 import sys
 import math
-from datetime import date
+from collections import defaultdict
+from datetime import date, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -293,11 +294,17 @@ def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=N
         if user and _month_in_break(user.winter_break_start, user.winter_break_end, f_mo):
             cov["is_winter_break"] = 1
         _derive_income(cov, float(user.monthly_income) if user and user.monthly_income else None)
-        # Post-graduation: no tuition or work income, living expenses continue
+        # Post-graduation: zero all enrollment-tied costs (tuition, insurance, scholarships, break flags)
         if user and user.graduation_date and date(f_yr, f_mo, 1) > user.graduation_date:
             cov["tuition_due"] = 0.0
             cov["income_amount"] = 0.0
             cov["is_working"] = 0
+            cov["health_insurance"] = 0
+            cov["scholarship_received"] = 0.0
+            cov["is_summer_break"] = 0
+            cov["is_winter_break"] = 0
+            cov["break_hourly_rate"] = 0.0
+            cov["break_hours_per_week"] = 0.0
         future_covariates.append(cov)
 
     return _execute(history, monthly_labels, future_covariates, next_months, prediction_months, cold_start, graduation_date)
@@ -463,9 +470,143 @@ def _compute_missing_fields(covariates: list[dict], prediction_months: int) -> l
 # Weekly pipeline
 # ---------------------------------------------------------------------------
 
-_WEEKLY_DOLLAR_KEYS = ("rent", "tuition_due", "scholarship_received", "travel_cost",
+# rent is excluded from this list — it is handled separately with rent-week detection
+_WEEKLY_DOLLAR_KEYS = ("tuition_due", "scholarship_received", "travel_cost",
                        "income_amount", "food_estimate", "utilities_estimate")
 _WEEKS_PER_MONTH = 52 / 12  # exact: 4.3333... weeks per month
+
+
+def _is_rent_week_forecast(iso_year: int, iso_week: int, rent_day: int = 1) -> bool:
+    """Returns True if ISO week contains `rent_day` day of any month."""
+    try:
+        week_monday = date.fromisocalendar(iso_year, iso_week, 1)
+        for offset in range(7):
+            d = week_monday + timedelta(days=offset)
+            if d.day == rent_day:
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def _detect_recurring_from_transactions(user_id, db: Session) -> dict:
+    """
+    Scan last 90 days of EXPENSE transactions for recurring monthly patterns.
+    Returns {field_name: (monthly_amount, "detected_from_transactions")}.
+    Used as Tier 2 fallback when ForecastContext values are missing.
+    """
+    RENT_CATS  = {"HOUSING", "RENT"}
+    FOOD_CATS  = {"FOOD", "GROCERIES", "DINING", "RESTAURANT", "FOOD_DELIVERY", "FOOD & DINING"}
+    UTIL_CATS  = {"UTILITIES", "BILLS", "PHONE", "INTERNET", "SUBSCRIPTIONS", "SUBSCRIPTION"}
+    cutoff = date.today() - timedelta(days=90)
+
+    try:
+        rows = db.query(
+            extract("year",  Transaction.transaction_date).label("yr"),
+            extract("month", Transaction.transaction_date).label("mo"),
+            Transaction.category,
+            func.sum(func.coalesce(Transaction.amount_in_usd, Transaction.amount)).label("total"),
+        ).filter(
+            Transaction.user_id == user_id,
+            Transaction.type == TransactionTypeEnum.EXPENSE,
+            Transaction.transaction_date >= cutoff,
+        ).group_by("yr", "mo", Transaction.category).all()
+    except Exception:
+        return {}
+
+    month_rent: dict = defaultdict(float)
+    month_food: dict = defaultdict(float)
+    month_util: dict = defaultdict(float)
+
+    for r in rows:
+        cat = (r.category or "").upper().strip()
+        key = (int(r.yr), int(r.mo))
+        if cat in RENT_CATS:
+            month_rent[key] += float(r.total)
+        if cat in FOOD_CATS:
+            month_food[key] += float(r.total)
+        if cat in UTIL_CATS:
+            month_util[key] += float(r.total)
+
+    def _avg_recurring(d: dict) -> float | None:
+        vals = list(d.values())
+        if len(vals) < 2:
+            return None
+        avg = sum(vals) / len(vals)
+        if all(abs(v - avg) / max(avg, 1) < 0.25 for v in vals):
+            return round(avg, 2)
+        return None
+
+    result: dict = {}
+    if (v := _avg_recurring(month_rent)):
+        result["rent"] = (v, "detected_from_transactions")
+    if (v := _avg_recurring(month_food)):
+        result["food_estimate"] = (v, "detected_from_transactions")
+    if (v := _avg_recurring(month_util)):
+        result["utilities_estimate"] = (v, "detected_from_transactions")
+    return result
+
+
+def _compute_covariate_sources(ctx, detected: dict) -> dict:
+    """
+    Build covariate_sources for the API response.
+    Priority: ForecastContext (user_setup) > detected_from_transactions > missing.
+    """
+    FIELDS = ["rent", "food_estimate", "utilities_estimate",
+              "tuition_due", "scholarship_received", "exchange_rate", "hourly_rate"]
+    sources: dict = {}
+    for field in FIELDS:
+        ctx_val = float(getattr(ctx, field, 0) or 0) if ctx else 0.0
+        ctx_valid = ctx_val > 0 and not (field == "exchange_rate" and ctx_val == 1.0)
+        if ctx_valid:
+            sources[field] = {"amount": ctx_val, "source": "user_setup"}
+        elif field in detected:
+            sources[field] = {"amount": detected[field][0], "source": "detected_from_transactions"}
+        else:
+            sources[field] = {"amount": 0.0, "source": "missing"}
+    return sources
+
+
+def _build_factors_weekly(cov: dict, history_base: float, post_graduation: bool = False) -> dict:
+    """Build a human-readable factor breakdown for one forecast week."""
+    travel_cost = float(cov.get("travel_cost") or 0)
+    travel_delta = float(cov.get("travel_home", 0)) * (
+        travel_cost if travel_cost > 0 else round(1200.0 / _WEEKS_PER_MONTH, 2)
+    )
+    summer_delta = -float(cov.get("is_summer_break", 0)) * max(
+        round(300.0 / _WEEKS_PER_MONTH, 2), history_base * 0.15
+    )
+    winter_delta = -float(cov.get("is_winter_break", 0)) * max(
+        round(200.0 / _WEEKS_PER_MONTH, 2), history_base * 0.10
+    )
+    income = float(cov.get("income_amount", 0))
+    income_delta = (
+        -min(income * 0.08, round(300.0 / _WEEKS_PER_MONTH, 2)) if income > 0
+        else -float(cov.get("is_working", 0)) * round(150.0 / _WEEKS_PER_MONTH, 2)
+    )
+    hi_delta = float(cov.get("health_insurance", 0)) * round(150.0 / _WEEKS_PER_MONTH, 2)
+
+    rent_monthly = float(cov.get("rent_monthly") or 0)
+    iso_yr_v = cov.get("iso_yr")
+    iso_wk_v = cov.get("iso_wk")
+    if rent_monthly > 0 and iso_yr_v is not None and iso_wk_v is not None:
+        is_rw = _is_rent_week_forecast(int(iso_yr_v), int(iso_wk_v))
+        rent_delta = rent_monthly if is_rw else 0.0
+    else:
+        is_rw = False
+        rent_delta = float(cov.get("rent", 0))
+
+    return {
+        "base": round(history_base, 2),
+        "rent_added": round(rent_delta, 2),
+        "food_added": round(float(cov.get("food_estimate", 0)), 2),
+        "break_reduction": round(summer_delta + winter_delta, 2),
+        "health_insurance_added": round(hi_delta, 2),
+        "income_reduction": round(income_delta, 2),
+        "travel_added": round(travel_delta, 2),
+        "is_rent_week": is_rw,
+        "post_graduation": post_graduation,
+    }
 
 
 def _query_history_weekly(user_id, db: Session, limit_weeks: int | None = None) -> tuple[list[float], list[tuple]]:
@@ -512,11 +653,31 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
 
     user: User = db.query(User).filter(User.id == user_id).first()
 
-    # Generate next N ISO weeks, mapping each to its parent calendar month's ForecastContext
+    # Tier 2 fallback: detect recurring values from recent transactions
+    detected_vals = _detect_recurring_from_transactions(user_id, db)
+
+    # Source transparency: show where each covariate value came from
+    ctx_sample = (
+        db.query(ForecastContext)
+        .filter(ForecastContext.user_id == user_id)
+        .order_by(ForecastContext.year.desc(), ForecastContext.month.desc())
+        .first()
+    )
+    covariate_sources = _compute_covariate_sources(ctx_sample, detected_vals)
+
+    # Recency-weighted base for factor computation (mirrors chronos_model.py)
+    if history:
+        recent = history[-4:]
+        weights_raw = [0.1, 0.2, 0.3, 0.4][-len(recent):]
+        total_w = sum(weights_raw)
+        history_base_weekly = sum(w * v for w, v in zip(weights_raw, recent)) / total_w
+    else:
+        history_base_weekly = round(1000.0 / _WEEKS_PER_MONTH, 2)
+
+    # Generate next N ISO weeks
     next_weeks: list[tuple] = []
     yr, wk = last_yr, last_wk
     for _ in range(prediction_weeks):
-        # Advance one ISO week, handling year boundaries via date arithmetic
         try:
             next_monday = date.fromisocalendar(yr, wk + 1, 1)
         except ValueError:
@@ -527,7 +688,6 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
 
     weekly_covariates = []
     for iso_yr, iso_wk in next_weeks:
-        # Use Monday of the ISO week to determine calendar year/month
         week_monday = date.fromisocalendar(iso_yr, iso_wk, 1)
         f_yr, f_mo = week_monday.year, week_monday.month
 
@@ -538,28 +698,70 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
                 ForecastContext.month == f_mo,
             ).first()
         )
-        # Apply break flags from user academic schedule
+
+        # Tier 2: fill missing spending fields from detected recurring transactions
+        for field, (amount, _src) in detected_vals.items():
+            if field in ("rent", "food_estimate", "utilities_estimate") and not cov.get(field):
+                cov[field] = amount
+
         if user and _month_in_break(user.summer_break_start, user.summer_break_end, f_mo):
             cov["is_summer_break"] = 1
         if user and _month_in_break(user.winter_break_start, user.winter_break_end, f_mo):
             cov["is_winter_break"] = 1
         _derive_income(cov, float(user.monthly_income) if user and user.monthly_income else None)
-        # Post-graduation zeroing
-        if user and user.graduation_date and date(f_yr, f_mo, 1) > user.graduation_date:
+
+        # Post-graduation: zero all enrollment-tied costs
+        is_post_grad = bool(user and user.graduation_date and date(f_yr, f_mo, 1) > user.graduation_date)
+        if is_post_grad:
             cov["tuition_due"] = 0.0
             cov["income_amount"] = 0.0
             cov["is_working"] = 0
-        # Scale monthly dollar amounts down to weekly
+            cov["health_insurance"] = 0
+            cov["scholarship_received"] = 0.0
+            cov["is_summer_break"] = 0
+            cov["is_winter_break"] = 0
+            cov["break_hourly_rate"] = 0.0
+            cov["break_hours_per_week"] = 0.0
+
+        # Preserve monthly rent before scaling (for rent-week detection in chronos_model.py)
+        cov["rent_monthly"] = float(cov.get("rent", 0))
+        cov["iso_yr"] = iso_yr
+        cov["iso_wk"] = iso_wk
+        cov["_is_post_grad"] = is_post_grad
+
+        # Scale monthly → weekly (rent excluded — handled as rent_monthly above)
         for key in _WEEKLY_DOLLAR_KEYS:
             if cov.get(key):
                 cov[key] = round(cov[key] / _WEEKS_PER_MONTH, 2)
+        # Also divide the original `rent` key for statistical fallback compatibility
+        if cov.get("rent"):
+            cov["rent"] = round(cov["rent"] / _WEEKS_PER_MONTH, 2)
+
         weekly_covariates.append(cov)
+
+    # Data quality and model metadata
+    n_real = len(weekly_labels) - (1 if cold_start else 0)
+    data_quality = "good" if n_real >= 12 else ("limited" if n_real >= 6 else "sparse")
+    covariates_active = [
+        k for k in ["rent", "food_estimate", "tuition_due", "health_insurance",
+                    "is_summer_break", "is_winter_break", "exchange_rate", "income_amount"]
+        if any(c.get(k) for c in weekly_covariates)
+    ]
+    model_info = {
+        "model_used": "chronos-t5-small" if (chronos_model and chronos_model._PIPELINE) else "statistical-fallback",
+        "history_points": len(weekly_labels),
+        "covariates_active": covariates_active,
+        "data_quality": data_quality,
+    }
+    missing = _compute_missing_fields(weekly_covariates, int(round(prediction_weeks / _WEEKS_PER_MONTH)))
 
     if chronos_model is None:
         predictions = _statistical_forecast(history, weekly_covariates, prediction_weeks)
         for pred, (iso_yr, iso_wk) in zip(predictions, next_weeks):
             pred["year"] = iso_yr
             pred["week"] = iso_wk
+        for pred, cov in zip(predictions, weekly_covariates):
+            pred["factors"] = _build_factors_weekly(cov, history_base_weekly, bool(cov.get("_is_post_grad")))
         return {
             "history": [
                 {"year": y, "week": w, "total": round(t, 2), "synthetic": cold_start and i == len(weekly_labels) - 1}
@@ -570,8 +772,11 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
             "granularity": "weekly",
             "graduation_date": None,
             "warnings": ["Using statistical forecast (trend + smoothing). Chronos-2 requires the local backend."],
-            "missing_fields": [],
+            "missing_fields": missing,
+            "model_info": model_info,
+            "covariate_sources": covariate_sources,
         }
+
     ok, msg = chronos_model.has_enough_data(history)
     if not ok:
         raise HTTPException(status_code=422, detail=msg)
@@ -589,6 +794,8 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
     for pred, (iso_yr, iso_wk) in zip(predictions, next_weeks):
         pred["year"] = iso_yr
         pred["week"] = iso_wk
+    for pred, cov in zip(predictions, weekly_covariates):
+        pred["factors"] = _build_factors_weekly(cov, history_base_weekly, bool(cov.get("_is_post_grad")))
 
     warnings = []
     if msg:
@@ -606,5 +813,7 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
         "granularity": "weekly",
         "graduation_date": None,
         "warnings": warnings,
-        "missing_fields": _compute_missing_fields(weekly_covariates, round(prediction_weeks / _WEEKS_PER_MONTH)),
+        "missing_fields": missing,
+        "model_info": model_info,
+        "covariate_sources": covariate_sources,
     }
