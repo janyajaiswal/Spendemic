@@ -13,7 +13,7 @@ cd "$(dirname "$0")/backend"
 source .venv/bin/activate
 
 # Start the FastAPI backend (includes the Chronos forecasting model)
-uvicorn main:app --host 0.0.0.0 --port 8000 > /tmp/spendemic_backend.log 2>&1 &
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload > /tmp/spendemic_backend.log 2>&1 &
 BACKEND_PID=$!
 sleep 3
 

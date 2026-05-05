@@ -1,4 +1,5 @@
 import { useContext } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { AuthProvider, AuthContext } from './contexts/AuthContext';
@@ -58,6 +59,7 @@ function App() {
           <AppRoutes />
         </BrowserRouter>
       </AuthProvider>
+      <Analytics />
     </GoogleOAuthProvider>
   );
 }
