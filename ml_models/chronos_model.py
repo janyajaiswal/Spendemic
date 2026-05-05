@@ -270,7 +270,10 @@ def _apply_covariates(
 # Weekly forecast — same Chronos-2 pipeline, weekly granularity
 # ---------------------------------------------------------------------------
 
-_WEEKS_PER_MONTH = 52 / 12  # exact: 4.3333... weeks per month
+# Annualized average: 52 weeks ÷ 12 months = 4.333 weeks/month.
+# A flat "4 weeks" would undercount by ~8% annually (4×12=48 weeks, not 52).
+# e.g. $19/hr × 20 hrs/wk × 4.333 = $1,646.67/mo, not $1,520 (flat-4 convention).
+_WEEKS_PER_MONTH = 52 / 12
 
 
 def forecast_weekly(

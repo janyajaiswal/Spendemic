@@ -27,8 +27,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
 
+import httpx
+from datetime import datetime, timezone
+
 from database import get_db
-from models import Transaction, ForecastContext, TransactionTypeEnum, User
+from models import Transaction, ForecastContext, TransactionTypeEnum, User, ExchangeRateCache
+from routers.exchange_rates import _FALLBACK_RATES, _API_KEY, _PLACEHOLDER, _CACHE_TTL
 from routers.auth import get_current_user
 from schemas import ForecastRequest, ForecastResponse
 
@@ -425,7 +429,10 @@ def _derive_income(cov: dict, fallback_monthly: float | None = None) -> None:
     """
     Mutate cov in-place to ensure income_amount is set.
     Priority: break rate > regular hourly rate > profile monthly_income fallback.
-    Uses exact _WEEKS_PER_MONTH (52/12) instead of rounded 4.33.
+
+    Monthly income = hourly_rate × hours_per_week × (52/12).
+    Uses the annualized average (52 weeks ÷ 12 months = 4.333 weeks/month) so the
+    yearly total is correct. A flat ×4 would undercount by ~8% per year.
     """
     if not cov.get("income_amount"):
         on_break = cov.get("is_summer_break") or cov.get("is_winter_break")
@@ -441,10 +448,70 @@ def _derive_income(cov: dict, fallback_monthly: float | None = None) -> None:
             cov["income_amount"] = float(fallback_monthly)
 
 
+def _fetch_exchange_rate_sync(home_currency: str, study_currency: str, db: Session) -> float | None:
+    """
+    Fetch home→study exchange rate synchronously.
+    Priority: DB cache → live API → static fallback table.
+    Returns None if both currencies are the same (no conversion needed).
+    """
+    home = home_currency.upper()
+    study = study_currency.upper()
+    if home == study:
+        return None  # no conversion needed
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - _CACHE_TTL
+
+    # Check DB cache
+    cached = db.query(ExchangeRateCache).filter(
+        ExchangeRateCache.from_currency == home,
+        ExchangeRateCache.to_currency == study,
+        ExchangeRateCache.fetched_at >= cutoff,
+    ).first()
+    if cached:
+        return float(cached.rate)
+
+    # Live API fetch (synchronous)
+    if _API_KEY not in _PLACEHOLDER:
+        try:
+            resp = httpx.get(
+                f"https://v6.exchangerate-api.com/v6/{_API_KEY}/latest/{home}",
+                timeout=6.0,
+            )
+            data = resp.json()
+            if data.get("result") == "success":
+                rates: dict[str, float] = data["conversion_rates"]
+                # Upsert all rates into cache
+                for to_cur, rate in rates.items():
+                    existing = db.query(ExchangeRateCache).filter(
+                        ExchangeRateCache.from_currency == home,
+                        ExchangeRateCache.to_currency == to_cur,
+                    ).first()
+                    if existing:
+                        existing.rate = rate
+                        existing.fetched_at = now
+                    else:
+                        db.add(ExchangeRateCache(
+                            from_currency=home, to_currency=to_cur,
+                            rate=rate, fetched_at=now,
+                        ))
+                db.commit()
+                return rates.get(study)
+        except Exception:
+            pass
+
+    # Static fallback
+    base_usd = _FALLBACK_RATES.get(home, 1.0)
+    study_usd = _FALLBACK_RATES.get(study, 1.0)
+    return round(study_usd / base_usd, 6)
+
+
 def _compute_missing_fields(covariates: list[dict], prediction_months: int) -> list[str]:
     """
     Return human-readable names of fields absent from covariates that would
     meaningfully improve forecast accuracy for international students.
+    Scholarship is always assumed $0 when missing — not flagged here.
+    Tuition is flagged separately via tuition_prompt_needed.
     """
     missing: set[str] = set()
     for cov in covariates:
@@ -457,12 +524,11 @@ def _compute_missing_fields(covariates: list[dict], prediction_months: int) -> l
             missing.add("hourly_rate / income_amount")
         if not cov.get("food_estimate"):
             missing.add("food_estimate")
-    if prediction_months > 2:
-        if not any(cov.get("tuition_due") or cov.get("scholarship_received") for cov in covariates):
-            missing.add("tuition_due (if enrolled)")
+    # Exchange rate: only flag as missing if not present in covariates
+    # (auto-fetch from API fills it when user has home/study currency set)
     if prediction_months > 6:
         if not any(cov.get("exchange_rate") and cov["exchange_rate"] != 1.0 for cov in covariates):
-            missing.add("exchange_rate")
+            missing.add("exchange_rate (set home currency in Settings)")
     return sorted(missing)
 
 
@@ -473,7 +539,10 @@ def _compute_missing_fields(covariates: list[dict], prediction_months: int) -> l
 # rent is excluded from this list — it is handled separately with rent-week detection
 _WEEKLY_DOLLAR_KEYS = ("tuition_due", "scholarship_received", "travel_cost",
                        "income_amount", "food_estimate", "utilities_estimate")
-_WEEKS_PER_MONTH = 52 / 12  # exact: 4.3333... weeks per month
+# Annualized average: 52 weeks ÷ 12 months = 4.333 weeks/month.
+# A flat "4 weeks" would undercount by ~8% annually (4×12=48 weeks, not 52).
+# e.g. $19/hr × 20 hrs/wk × 4.333 = $1,646.67/mo, not $1,520 (flat-4 convention).
+_WEEKS_PER_MONTH = 52 / 12
 
 
 def _is_rent_week_forecast(iso_year: int, iso_week: int, rent_day: int = 1) -> bool:
@@ -487,6 +556,21 @@ def _is_rent_week_forecast(iso_year: int, iso_week: int, rent_day: int = 1) -> b
     except Exception:
         pass
     return False
+
+
+def _tuition_seen_in_last_6_months(user_id, db: Session) -> bool:
+    """Returns True if any EDUCATION/TUITION transaction exists in the last 6 months."""
+    TUITION_CATS = {"EDUCATION", "TUITION", "UNIVERSITY", "COLLEGE", "SCHOOL"}
+    cutoff = date.today() - timedelta(days=180)
+    try:
+        rows = db.query(Transaction).filter(
+            Transaction.user_id == user_id,
+            Transaction.type == TransactionTypeEnum.EXPENSE,
+            Transaction.transaction_date >= cutoff,
+        ).all()
+        return any((r.category or "").upper().strip() in TUITION_CATS for r in rows)
+    except Exception:
+        return False
 
 
 def _detect_recurring_from_transactions(user_id, db: Session) -> dict:
@@ -547,10 +631,10 @@ def _detect_recurring_from_transactions(user_id, db: Session) -> dict:
     return result
 
 
-def _compute_covariate_sources(ctx, detected: dict) -> dict:
+def _compute_covariate_sources(ctx, detected: dict, auto_exchange_rate: float | None = None) -> dict:
     """
     Build covariate_sources for the API response.
-    Priority: ForecastContext (user_setup) > detected_from_transactions > missing.
+    Priority: ForecastContext (user_setup) > auto-fetched from API > detected_from_transactions > missing.
     """
     FIELDS = ["rent", "food_estimate", "utilities_estimate",
               "tuition_due", "scholarship_received", "exchange_rate", "hourly_rate"]
@@ -560,8 +644,13 @@ def _compute_covariate_sources(ctx, detected: dict) -> dict:
         ctx_valid = ctx_val > 0 and not (field == "exchange_rate" and ctx_val == 1.0)
         if ctx_valid:
             sources[field] = {"amount": ctx_val, "source": "user_setup"}
+        elif field == "exchange_rate" and auto_exchange_rate is not None:
+            sources[field] = {"amount": auto_exchange_rate, "source": "auto_fetched"}
         elif field in detected:
             sources[field] = {"amount": detected[field][0], "source": "detected_from_transactions"}
+        elif field == "scholarship_received":
+            # Scholarship defaults to $0 silently — not everyone has one
+            sources[field] = {"amount": 0.0, "source": "assumed_zero"}
         else:
             sources[field] = {"amount": 0.0, "source": "missing"}
     return sources
@@ -653,6 +742,13 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
 
     user: User = db.query(User).filter(User.id == user_id).first()
 
+    # Auto-fetch exchange rate from API when user has home + study currencies set
+    auto_exchange_rate: float | None = None
+    if user and user.home_currency and user.study_country_currency:
+        home_cur = user.home_currency.value if hasattr(user.home_currency, "value") else str(user.home_currency)
+        study_cur = user.study_country_currency.value if hasattr(user.study_country_currency, "value") else str(user.study_country_currency)
+        auto_exchange_rate = _fetch_exchange_rate_sync(home_cur, study_cur, db)
+
     # Tier 2 fallback: detect recurring values from recent transactions
     detected_vals = _detect_recurring_from_transactions(user_id, db)
 
@@ -663,7 +759,7 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
         .order_by(ForecastContext.year.desc(), ForecastContext.month.desc())
         .first()
     )
-    covariate_sources = _compute_covariate_sources(ctx_sample, detected_vals)
+    covariate_sources = _compute_covariate_sources(ctx_sample, detected_vals, auto_exchange_rate)
 
     # Recency-weighted base for factor computation (mirrors chronos_model.py)
     if history:
@@ -703,6 +799,10 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
         for field, (amount, _src) in detected_vals.items():
             if field in ("rent", "food_estimate", "utilities_estimate") and not cov.get(field):
                 cov[field] = amount
+
+        # Auto-fill exchange rate from API if not set in ForecastContext
+        if auto_exchange_rate is not None and not (cov.get("exchange_rate") and cov["exchange_rate"] != 1.0):
+            cov["exchange_rate"] = auto_exchange_rate
 
         if user and _month_in_break(user.summer_break_start, user.summer_break_end, f_mo):
             cov["is_summer_break"] = 1
@@ -755,6 +855,11 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
     }
     missing = _compute_missing_fields(weekly_covariates, int(round(prediction_weeks / _WEEKS_PER_MONTH)))
 
+    # tuition_prompt_needed: true when tuition is not set in ForecastContext AND
+    # hasn't appeared in the last 6 months of transactions — user should confirm if enrolled
+    ctx_has_tuition = any(cov.get("tuition_due", 0) > 0 for cov in weekly_covariates)
+    tuition_prompt_needed = not ctx_has_tuition and not _tuition_seen_in_last_6_months(user_id, db)
+
     if chronos_model is None:
         predictions = _statistical_forecast(history, weekly_covariates, prediction_weeks)
         for pred, (iso_yr, iso_wk) in zip(predictions, next_weeks):
@@ -773,6 +878,7 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
             "graduation_date": None,
             "warnings": ["Using statistical forecast (trend + smoothing). Chronos-2 requires the local backend."],
             "missing_fields": missing,
+            "tuition_prompt_needed": tuition_prompt_needed,
             "model_info": model_info,
             "covariate_sources": covariate_sources,
         }
@@ -814,6 +920,7 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
         "graduation_date": None,
         "warnings": warnings,
         "missing_fields": missing,
+        "tuition_prompt_needed": tuition_prompt_needed,
         "model_info": model_info,
         "covariate_sources": covariate_sources,
     }

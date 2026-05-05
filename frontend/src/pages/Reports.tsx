@@ -39,11 +39,11 @@ interface PredictionFactors {
 }
 interface Prediction    { year: number; month?: number; week?: number; month_offset?: number; week_offset?: number; lower: number; median: number; upper: number; factors?: PredictionFactors }
 interface ModelInfo     { model_used: string; history_points: number; covariates_active: string[]; data_quality: 'good' | 'limited' | 'sparse' }
-interface CovariateSource { amount: number; source: 'user_setup' | 'detected_from_transactions' | 'missing' }
+interface CovariateSource { amount: number; source: 'user_setup' | 'detected_from_transactions' | 'auto_fetched' | 'missing' | 'assumed_zero' }
 interface ForecastResp  {
   history: HistoryPoint[]; predictions: Prediction[]; prediction_months?: number; prediction_weeks?: number;
   granularity: string; graduation_date: string | null; warnings: string[];
-  missing_fields?: string[]; model_info?: ModelInfo; covariate_sources?: Record<string, CovariateSource>;
+  missing_fields?: string[]; tuition_prompt_needed?: boolean; model_info?: ModelInfo; covariate_sources?: Record<string, CovariateSource>;
 }
 interface WeeklySummaryRow { year: number; week: number; week_start: string; week_end: string; total: number }
 interface LoanMonthPoint { month: number; year: number; remaining: number }
@@ -488,6 +488,21 @@ export default function Reports() {
       </Card>
 
       {/* ── Missing fields card ── */}
+      {forecast?.tuition_prompt_needed && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)',
+          borderRadius: 8, padding: '10px 14px', marginBottom: 12, fontSize: '0.83em',
+          color: 'var(--text-secondary)',
+        }}>
+          <Info size={15} style={{ marginTop: 1, flexShrink: 0, color: '#f59e0b' }} />
+          <span>
+            <b style={{ color: 'var(--text-primary)' }}>Are you paying tuition?</b> — No tuition payments found in your last 6 months of transactions. If you're enrolled, add your tuition amount in{' '}
+            <a href="/transactions" style={{ color: '#f59e0b' }}>Forecast Setup</a> for a more accurate forecast. Otherwise it's assumed $0.
+          </span>
+        </div>
+      )}
+
       {forecast?.missing_fields && forecast.missing_fields.length > 0 && (
         <div style={{
           display: 'flex', alignItems: 'flex-start', gap: 10,
@@ -576,8 +591,16 @@ export default function Reports() {
                       tuition_due: 'Tuition', scholarship_received: 'Scholarship',
                       exchange_rate: 'Exchange rate', hourly_rate: 'Hourly rate',
                     };
-                    const srcColor = info.source === 'user_setup' ? '#2dd4bf' : info.source === 'detected_from_transactions' ? '#f59e0b' : '#f87171';
-                    const srcText = info.source === 'user_setup' ? 'Forecast Setup ✓' : info.source === 'detected_from_transactions' ? 'auto-detected ✓' : 'missing';
+                    const srcColor = info.source === 'user_setup' ? '#2dd4bf'
+                      : info.source === 'detected_from_transactions' ? '#f59e0b'
+                      : info.source === 'auto_fetched' ? '#2dd4bf'
+                      : info.source === 'assumed_zero' ? '#2dd4bf'
+                      : '#f87171';
+                    const srcText = info.source === 'user_setup' ? 'Forecast Setup ✓'
+                      : info.source === 'detected_from_transactions' ? 'auto-detected ✓'
+                      : info.source === 'auto_fetched' ? 'live rate ✓'
+                      : info.source === 'assumed_zero' ? '$0 assumed'
+                      : 'missing';
                     return (
                       <div key={field} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
                         <span style={{ color: 'var(--text-secondary)' }}>{labels[field] ?? field}</span>
