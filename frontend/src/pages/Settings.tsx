@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { User, MapPin, BookOpen, Save, CheckCircle, AlertCircle, Briefcase } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE } from '../lib/api';
+import InfoTooltip from '../components/InfoTooltip';
 import '../styles/settings.css';
 
 type Tab = 'profile' | 'address' | 'academic' | 'jobs';
@@ -657,16 +658,32 @@ export default function Settings() {
                     placeholder="e.g. Cal State Fullerton" />
                 </Field>
                 <div style={s.row}>
-                  <Field label="Home Currency" required>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ ...s.label, display: 'flex', alignItems: 'center' }}>
+                      Home Currency <span style={{ color: '#e74c3c' }}>*</span>
+                      <InfoTooltip
+                        text="The currency your money originally comes from (e.g. INR if you're from India, CNY for China). Used to calculate exchange rate adjustments on your income."
+                        position="right"
+                        maxWidth={230}
+                      />
+                    </label>
                     <select style={{ ...s.input, ...s.select }} value={form.home_currency} onChange={set('home_currency')}>
                       {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
-                  </Field>
-                  <Field label="Study Country Currency" required>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ ...s.label, display: 'flex', alignItems: 'center' }}>
+                      Study Country Currency <span style={{ color: '#e74c3c' }}>*</span>
+                      <InfoTooltip
+                        text="The currency you spend in day-to-day where you study (usually USD if you're in the US). All forecasts and budgets are shown in this currency."
+                        position="right"
+                        maxWidth={230}
+                      />
+                    </label>
                     <select style={{ ...s.input, ...s.select }} value={form.study_country_currency} onChange={set('study_country_currency')}>
                       {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
-                  </Field>
+                  </div>
                 </div>
                 <div style={s.row}>
                   <Field label="Expected Graduation Date" required>
@@ -679,10 +696,18 @@ export default function Settings() {
                   </Field>
                 </div>
                 <div style={s.row}>
-                  <Field label="Scholarship Amount (USD/period)">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ ...s.label, display: 'flex', alignItems: 'center' }}>
+                      Scholarship Amount (USD/period)
+                      <InfoTooltip
+                        text="If you receive a scholarship, enter the amount per payment period. The forecast model uses this to adjust your effective income. Leave blank if you don't receive one — the model assumes $0."
+                        position="top"
+                        maxWidth={240}
+                      />
+                    </label>
                     <input style={s.input} type="number" min="0" value={form.scholarship_amount}
                       onChange={set('scholarship_amount')} placeholder="e.g. 2500" />
-                  </Field>
+                  </div>
                   <Field label="Scholarship Frequency">
                     <select style={{ ...s.input, ...s.select }} value={form.scholarship_frequency} onChange={set('scholarship_frequency')}>
                       <option value="NONE">None</option>
@@ -707,10 +732,18 @@ export default function Settings() {
                       <option value="OTHER">Other</option>
                     </select>
                   </Field>
-                  <Field label="Max Work Hours / Week">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    <label style={{ ...s.label, display: 'flex', alignItems: 'center' }}>
+                      Max Work Hours / Week
+                      <InfoTooltip
+                        text={'Your visa-allowed maximum work hours per week. This is used by the Visa & Work tracker to warn you when you\'re approaching your cap.\n\nF-1 on-campus: 20 hrs/semester\nF-1 during break: 40 hrs (full-time)\nOPT/CPT: varies by employer authorization\nJ-1: up to 20 hrs/week'}
+                        position="top"
+                        maxWidth={250}
+                      />
+                    </label>
                     <input style={s.input} type="number" min="0" max="168" value={form.max_work_hours_per_week}
                       onChange={set('max_work_hours_per_week')} placeholder="F-1 on-campus: 20" />
-                  </Field>
+                  </div>
                 </div>
                 {form.visa_type === 'F1' && (
                   <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(255,215,0,0.06)', border: '1px solid rgba(255,215,0,0.2)', marginTop: '-6px' }}>
@@ -720,7 +753,14 @@ export default function Settings() {
                   </div>
                 )}
                 <div style={s.infoBox}>
-                  <p style={{ ...s.infoText, fontWeight: 600, marginBottom: 6 }}>Academic Break Schedule</p>
+                  <p style={{ ...s.infoText, fontWeight: 600, marginBottom: 6, display: 'flex', alignItems: 'center' }}>
+                    Academic Break Schedule
+                    <InfoTooltip
+                      text={'Break dates tell the AI forecast model when your spending patterns change:\n• During summer/winter break: reduced food & activity costs, possible higher work hours\n• The model automatically reduces its prediction during break weeks\n\nLeave blank if you don\'t observe academic breaks.'}
+                      position="right"
+                      maxWidth={260}
+                    />
+                  </p>
                   <p style={s.infoText}>
                     Break dates are auto-flagged in your forecast. After graduation: tuition and work income are zeroed out — only living expenses continue.
                   </p>

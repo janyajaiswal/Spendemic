@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import type { TxType, RecurFreq, Category, Transaction } from '../types';
 
 import { API } from '../lib/api';
+import InfoTooltip from '../components/InfoTooltip';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface FcData {
@@ -652,7 +653,15 @@ export default function Transactions() {
       <div style={s.header}>
         <div>
           <h1 style={s.title}>Transactions</h1>
-          <p style={s.subtitle}>{MONTHS[filterMonth - 1]} {filterYear} · Working: <strong>{workingCurrency}</strong> · Home: <strong>{homeCurrency}</strong></p>
+          <p style={s.subtitle}>
+            {MONTHS[filterMonth - 1]} {filterYear} · Working: <strong>{workingCurrency}</strong>
+            <InfoTooltip
+              text="Working currency is the currency you spend in day-to-day (usually USD in the US). Home currency is where your money originally comes from. Set both in Settings → Profile."
+              position="bottom"
+              maxWidth={240}
+            />
+            {' '}· Home: <strong>{homeCurrency}</strong>
+          </p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
           <button style={{ ...s.addBtn, background: 'transparent', border: '1px solid rgba(255,255,255,0.2)', color: 'var(--brand-rose)' }}
@@ -673,6 +682,11 @@ export default function Transactions() {
             onClick={() => setImportOpen(true)}>
             <Upload size={16} /> Import
           </button>
+          <InfoTooltip
+            text="Import transactions from a CSV or Excel file exported from your bank. The app auto-detects date, amount, description, and category columns. Supported: most bank exports and spreadsheets."
+            position="bottom"
+            maxWidth={240}
+          />
           <button style={{ ...s.addBtn, background: 'transparent', border: '1px solid #f87171', color: '#f87171' }}
             onClick={() => { setDeleteAllOpen(true); setDeleteAllConfirmText(''); }}>
             <Trash2 size={16} /> Delete All
@@ -692,7 +706,7 @@ export default function Transactions() {
           <div style={{ ...s.cardValue, color: '#f87171' }}>{fmt(actualExpenses, workingCurrency)}</div>
         </div>
         <div style={{ ...s.card, borderColor: actualNet >= 0 ? '#2d4a7a' : '#7a4a2d' }}>
-          <div style={s.cardLabel}>Net Savings</div>
+          <div style={s.cardLabel}>Net Savings<InfoTooltip text="Net Savings = Income − Expenses for this month. Positive means you saved money; negative means you spent more than you earned." position="top" maxWidth={220} /></div>
           <div style={{ ...s.cardValue, color: actualNet >= 0 ? '#60a5fa' : '#fb923c' }}>
             {actualNet >= 0 ? '+' : ''}{fmt(actualNet, workingCurrency)}
           </div>
@@ -731,6 +745,11 @@ export default function Transactions() {
           Scenarios
           {scenarios.length > 0 && <span style={s.scenarioBadge}>{scenarios.length}</span>}
         </button>
+        <InfoTooltip
+          text="What-If Scenarios let you simulate financial events without affecting your real transactions. Try: 'What if I get a $500 scholarship?' or 'What if I take on a part-time job?' — see how it changes your net savings."
+          position="top"
+          maxWidth={260}
+        />
       </div>
 
       {/* Transaction List */}
@@ -927,6 +946,11 @@ export default function Transactions() {
           <span style={{ fontSize: '0.78em', opacity: 0.55, fontWeight: 400, marginLeft: '6px' }}>
             — tell Chronos-2 about upcoming expenses &amp; breaks
           </span>
+          <InfoTooltip
+            text={'Forecast Setup gives the AI model the information it can\'t detect automatically:\n• Rent, food, tuition amounts per month\n• Whether you\'re working and at what rate\n• Summer/winter break dates (when spending drops)\n• Health insurance and travel costs\n\nSet these once per year and the model uses them to predict your spending more accurately.'}
+            position="bottom"
+            maxWidth={270}
+          />
         </summary>
 
         <div style={s.fcBody}>

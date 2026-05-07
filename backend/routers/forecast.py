@@ -283,6 +283,25 @@ def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=N
     # Fetch user for break schedule and graduation date
     user: User = db.query(User).filter(User.id == user_id).first()
 
+    # Auto-fetch exchange rate from API when user has different home + study currencies
+    auto_exchange_rate: float | None = None
+    if user and user.home_currency and user.study_country_currency:
+        home_cur = user.home_currency.value if hasattr(user.home_currency, "value") else str(user.home_currency)
+        study_cur = user.study_country_currency.value if hasattr(user.study_country_currency, "value") else str(user.study_country_currency)
+        auto_exchange_rate = _fetch_exchange_rate_sync(home_cur, study_cur, db)
+
+    # Tier 2: detect recurring values from transactions for missing covariate fields
+    detected_vals = _detect_recurring_from_transactions(user_id, db)
+
+    # Source transparency
+    ctx_sample = (
+        db.query(ForecastContext)
+        .filter(ForecastContext.user_id == user_id)
+        .order_by(ForecastContext.year.desc(), ForecastContext.month.desc())
+        .first()
+    )
+    covariate_sources = _compute_covariate_sources(ctx_sample, detected_vals, auto_exchange_rate)
+
     future_covariates = []
     for f_yr, f_mo in next_months:
         cov = _ctx_to_dict(
@@ -292,6 +311,15 @@ def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=N
                 ForecastContext.month == f_mo,
             ).first()
         )
+        # Tier 2: fill missing fields from detected recurring transactions
+        for field, (amount, _src) in detected_vals.items():
+            if field in ("rent", "food_estimate", "utilities_estimate") and not cov.get(field):
+                cov[field] = amount
+
+        # Auto-fill exchange rate if not manually set
+        if auto_exchange_rate is not None and not (cov.get("exchange_rate") and cov["exchange_rate"] != 1.0):
+            cov["exchange_rate"] = auto_exchange_rate
+
         # Auto-apply summer/winter break flags from user's academic schedule
         if user and _month_in_break(user.summer_break_start, user.summer_break_end, f_mo):
             cov["is_summer_break"] = 1
@@ -311,7 +339,27 @@ def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=N
             cov["break_hours_per_week"] = 0.0
         future_covariates.append(cov)
 
-    return _execute(history, monthly_labels, future_covariates, next_months, prediction_months, cold_start, graduation_date)
+    n_real = len(monthly_labels) - (1 if cold_start else 0)
+    data_quality = "good" if n_real >= 6 else ("limited" if n_real >= 3 else "sparse")
+    covariates_active = [
+        k for k in ["rent", "food_estimate", "tuition_due", "health_insurance",
+                    "is_summer_break", "is_winter_break", "exchange_rate", "income_amount"]
+        if any(c.get(k) for c in future_covariates)
+    ]
+    model_info = {
+        "model_used": "chronos-t5-small" if (chronos_model and chronos_model._PIPELINE) else "statistical-fallback",
+        "history_points": len(monthly_labels),
+        "covariates_active": covariates_active,
+        "data_quality": data_quality,
+    }
+    ctx_has_tuition = any(cov.get("tuition_due", 0) > 0 for cov in future_covariates)
+    tuition_prompt_needed = not ctx_has_tuition and not _tuition_seen_in_last_6_months(user_id, db)
+
+    result = _execute(history, monthly_labels, future_covariates, next_months, prediction_months, cold_start, graduation_date)
+    result["model_info"] = model_info
+    result["covariate_sources"] = covariate_sources
+    result["tuition_prompt_needed"] = tuition_prompt_needed
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -319,7 +367,12 @@ def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=N
 # ---------------------------------------------------------------------------
 
 def _query_history(user_id, db: Session, limit: int | None = None) -> tuple[list[float], list[tuple]]:
-    """Aggregate expense transactions into monthly USD totals (oldest first)."""
+    """
+    Aggregate expense transactions into monthly USD totals (oldest first).
+    If ForecastContext has tuition_due for a past month but no education transaction
+    was logged, the tuition amount is added to that month's total — the user paid it
+    but didn't record the transaction.
+    """
     rows = (
         db.query(
             extract("year",  Transaction.transaction_date).label("yr"),
@@ -333,6 +386,46 @@ def _query_history(user_id, db: Session, limit: int | None = None) -> tuple[list
     )
     history = [float(r.total) for r in rows]
     labels  = [(int(r.yr), int(r.mo)) for r in rows]
+
+    # Detect which months had an education transaction logged
+    TUITION_CATS = {"EDUCATION", "TUITION", "UNIVERSITY", "COLLEGE", "SCHOOL"}
+    edu_rows = db.query(
+        extract("year", Transaction.transaction_date).label("yr"),
+        extract("month", Transaction.transaction_date).label("mo"),
+    ).filter(
+        Transaction.user_id == user_id,
+        Transaction.type == TransactionTypeEnum.EXPENSE,
+    ).all()
+    months_with_edu = {
+        (int(r.yr), int(r.mo)) for r in edu_rows
+        if (getattr(r, 'category', '') or '').upper().strip() in TUITION_CATS
+    }
+
+    # For past months with ForecastContext tuition but no logged education transaction,
+    # add the tuition to that month's history total so Chronos sees the real spending spike
+    today = date.today()
+    ctx_rows = db.query(ForecastContext).filter(
+        ForecastContext.user_id == user_id,
+        ForecastContext.tuition_due > 0,
+    ).all()
+    tuition_by_month = {
+        (c.year, c.month): float(c.tuition_due)
+        for c in ctx_rows
+        if date(c.year, c.month, 1) <= today  # only past months
+    }
+    label_set = {(y, m): i for i, (y, m) in enumerate(labels)}
+    for (yr, mo), tuition in tuition_by_month.items():
+        if (yr, mo) not in months_with_edu:
+            if (yr, mo) in label_set:
+                history[label_set[(yr, mo)]] += tuition
+            # If this month has no transactions at all, insert it as a new history point
+            else:
+                from bisect import insort
+                insert_pos = next((i for i, (y, m) in enumerate(labels) if (y, m) > (yr, mo)), len(labels))
+                labels.insert(insert_pos, (yr, mo))
+                history.insert(insert_pos, tuition)
+                label_set = {(y, m): i for i, (y, m) in enumerate(labels)}
+
     if limit and len(history) > limit:
         history, labels = history[-limit:], labels[-limit:]
     return history, labels

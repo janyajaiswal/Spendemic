@@ -8,6 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import '../styles/budgets.css';
 
 import { API } from '../lib/api';
+import InfoTooltip from '../components/InfoTooltip';
 
 type Period = 'MONTHLY' | 'WEEKLY';
 
@@ -250,7 +251,14 @@ export default function Budgets() {
                 </span>
               </div>
               <div className="budgets-strip-card" style={s.stripCard}>
-                <span style={s.stripLabel}>Available to Fund Goals</span>
+                <span style={s.stripLabel}>
+                  Available to Fund Goals
+                  <InfoTooltip
+                    text="This is your current month's net savings (income minus expenses). You can only fund goals when you have a positive surplus. Log transactions to keep this accurate."
+                    position="top"
+                    maxWidth={240}
+                  />
+                </span>
                 <span style={{ ...s.stripValue, color: netSavings > 0 ? '#4ade80' : '#888' }}>
                   {netSavings > 0 ? `$${netSavings.toFixed(2)}` : 'No surplus this month'}
                 </span>
@@ -370,7 +378,14 @@ export default function Budgets() {
           </span>
         </div>
         <div style={s.stripCard}>
-          <span style={s.stripLabel}>Over Budget</span>
+          <span style={s.stripLabel}>
+            Over Budget
+            <InfoTooltip
+              text="Number of categories where you've spent more than your set limit this month. Budgets reset at the start of each calendar month."
+              position="top"
+              maxWidth={220}
+            />
+          </span>
           <span style={{ ...s.stripValue, color: overCount > 0 ? '#f87171' : '#4ade80' }}>
             {overCount} {overCount === 1 ? 'category' : 'categories'}
           </span>

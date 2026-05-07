@@ -102,3 +102,9 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
+
+@app.get("/api/v1/config")
+async def get_config():
+    """Returns runtime config for the frontend — forecast URL is read from env at request time."""
+    forecast_url = os.getenv("FORECAST_API_URL", "").rstrip("/")
+    return {"forecast_url": forecast_url}

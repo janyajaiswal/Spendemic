@@ -134,6 +134,7 @@ class UserUpdate(BaseModel):
     monthly_loan_payment: Optional[Decimal] = None
     loan_start_date: Optional[date] = None
     timezone: Optional[str] = None
+    onboarding_completed: Optional[bool] = None
 
     @field_validator('name')
     @classmethod

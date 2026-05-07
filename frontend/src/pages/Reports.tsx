@@ -10,7 +10,8 @@ import {
 } from 'recharts';
 import { TrendingUp, GraduationCap, AlertTriangle, Info, RefreshCw } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { API, FORECAST_API } from '../lib/api';
+import { API, getForecastAPI } from '../lib/api';
+import InfoTooltip from '../components/InfoTooltip';
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function monthLabel(year: number, month: number) {
@@ -145,9 +146,10 @@ export default function Reports() {
     setLoading(true);
     setError(null);
     try {
+      const forecastBase = await getForecastAPI();
       const url = granularity === 'weekly'
-        ? `${FORECAST_API}/forecast?granularity=weekly&prediction_weeks=${predWeeks}`
-        : `${FORECAST_API}/forecast?granularity=monthly&prediction_months=${predMonths}`;
+        ? `${forecastBase}/forecast?granularity=weekly&prediction_weeks=${predWeeks}`
+        : `${forecastBase}/forecast?granularity=monthly&prediction_months=${predMonths}`;
       const res = await fetch(url, { headers: forecastHeaders });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -164,7 +166,8 @@ export default function Reports() {
 
   const fetchGradForecast = useCallback(async () => {
     try {
-      const res = await fetch(`${FORECAST_API}/forecast/to-graduation`, { headers: forecastHeaders });
+      const forecastBase = await getForecastAPI();
+      const res = await fetch(`${forecastBase}/forecast/to-graduation`, { headers: forecastHeaders });
       if (res.ok) setGradForecast(await res.json());
     } catch { /* graduation date not set — silently skip */ }
   }, [user?.accessToken]);
@@ -249,6 +252,11 @@ export default function Reports() {
           <h2 style={{ color: 'var(--text-primary)', margin: 0, fontSize: '1.5em', fontWeight: 700, letterSpacing: '-0.3px' }}>Spending Reports & Forecast</h2>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.8em', margin: 0, opacity: 0.65 }}>
             Powered by Amazon Chronos-2 · historical actuals + probabilistic predictions
+            <InfoTooltip
+              text="Chronos-2 is a time-series AI model by Amazon that learns from your past spending to predict future expenses. It accounts for factors like rent, food, tuition, scholarship, and academic calendar events."
+              position="bottom"
+              maxWidth={260}
+            />
           </p>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -361,8 +369,13 @@ export default function Reports() {
             <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em' }}>
               {granularity === 'weekly' ? 'Weekly' : 'Monthly'} Spending — History & Forecast
             </div>
-            <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', marginTop: 2, opacity: 0.6 }}>
+            <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', marginTop: 2, opacity: 0.6, display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
               Gray bars = actual · Orange dashed = 4-period avg · Cream line = forecast median · Shaded = confidence band
+              <InfoTooltip
+                text="The shaded band shows the uncertainty range: low estimate (lower bound) to high estimate (upper bound). Wider bands mean less certainty — usually because you have less transaction history."
+                position="bottom"
+                maxWidth={250}
+              />
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -534,8 +547,13 @@ export default function Reports() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
             {/* Factor breakdown for peak week */}
             <Card>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10, opacity: 0.6 }}>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10, opacity: 0.6, display: 'flex', alignItems: 'center' }}>
                 Why {peakLabel} is the peak
+                <InfoTooltip
+                  text="This breakdown shows what factors are driving the highest predicted spending period. Each line is a covariate (a variable the model uses) and its estimated dollar contribution to that week/month's total."
+                  position="right"
+                  maxWidth={240}
+                />
               </div>
               {mi && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
@@ -580,8 +598,13 @@ export default function Reports() {
 
             {/* Data sources panel */}
             <Card>
-              <div style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10, opacity: 0.6 }}>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10, opacity: 0.6, display: 'flex', alignItems: 'center' }}>
                 Where your data comes from
+                <InfoTooltip
+                  text={'The model uses these values to build your forecast:\n• Forecast Setup ✓ — you entered this manually\n• auto-detected ✓ — pulled from your recurring transactions\n• live rate ✓ — fetched from a currency exchange API\n• missing — not set, reducing forecast accuracy'}
+                  position="left"
+                  maxWidth={260}
+                />
               </div>
               {cs ? (
                 <div style={{ fontSize: '0.83em' }}>
@@ -628,7 +651,14 @@ export default function Reports() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <GraduationCap size={24} color="var(--accent)" />
             <div style={{ flex: 1 }}>
-              <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em' }}>Graduation Forecast</div>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em', display: 'flex', alignItems: 'center' }}>
+                Graduation Forecast
+                <InfoTooltip
+                  text="This projects your total spending from now until your graduation date. It uses the same Chronos-2 model with your academic calendar (breaks, tuition cycles, health insurance) factored in. After graduation, university costs are automatically removed."
+                  position="right"
+                  maxWidth={260}
+                />
+              </div>
               <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', opacity: 0.6 }}>
                 Through {gradForecast.graduation_date} · {gradMonths} month{gradMonths !== 1 ? 's' : ''} remaining
               </div>
@@ -649,8 +679,13 @@ export default function Reports() {
       {/* ── Historical table (weekly or monthly) ── */}
       {granularity === 'weekly' && weeklySummary && weeklySummary.length > 0 && (
         <Card>
-          <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em', marginBottom: 16 }}>
+          <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em', marginBottom: 16, display: 'flex', alignItems: 'center' }}>
             Weekly Spending History
+            <InfoTooltip
+              text={'A week-by-week breakdown of your actual spending.\n• 🏠 icon = week likely includes rent (starts 1st–5th of month)\n• ↑ orange = unusually high week (>1.5× standard deviation above your average)\n• vs. Avg = how this week compares to your personal average weekly spend'}
+              position="top"
+              maxWidth={270}
+            />
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875em' }}>
@@ -715,7 +750,14 @@ export default function Reports() {
         <Card style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
             <div>
-              <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em' }}>Loan Repayment Projection</div>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em', display: 'flex', alignItems: 'center' }}>
+                Loan Repayment Projection
+                <InfoTooltip
+                  text="Shows how your loan balance decreases month by month based on your monthly payment amount. Set your loan details in Settings → Profile to see this chart. Update 'total loan amount' and 'monthly payment' there."
+                  position="right"
+                  maxWidth={250}
+                />
+              </div>
               <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', marginTop: 2, opacity: 0.6 }}>
                 {loanProjection.months_remaining} months remaining · paid off by {loanProjection.payoff_date}
               </div>

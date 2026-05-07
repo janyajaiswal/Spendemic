@@ -14,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import '../styles/dashboard.css';
 
 import { API } from '../lib/api';
+import InfoTooltip from '../components/InfoTooltip';
 
 // ─────────────────────────────────────────────────────
 // Tab definitions
@@ -371,7 +372,14 @@ export default function Dashboard() {
                 </div>
               )}
               {/* Monthly summary cards */}
-              <h3 style={s.sectionTitle}>This month at a glance</h3>
+              <h3 style={{ ...s.sectionTitle, display: 'flex', alignItems: 'center' }}>
+                This month at a glance
+                <InfoTooltip
+                  text="Shows your income, expenses, and net savings for the current calendar month based on your logged transactions. Add transactions in the Transactions page to keep this up to date."
+                  position="right"
+                  maxWidth={240}
+                />
+              </h3>
               <div style={s.healthStrip}>
                 {[
                   { label: 'Income', value: summary?.total_income ?? 0, color: '#4ade80' },
@@ -406,7 +414,14 @@ export default function Dashboard() {
               {/* Budget status */}
               {budgets.length > 0 && (
                 <>
-                  <h3 style={s.sectionTitle}>Budget status</h3>
+                  <h3 style={{ ...s.sectionTitle, display: 'flex', alignItems: 'center' }}>
+                    Budget status
+                    <InfoTooltip
+                      text={'Shows how much of each budget you\'ve used this month.\n• Green = under budget\n• Amber = approaching limit (80%+)\n• Red = exceeded\n\nSet and manage budgets in the Budgets page.'}
+                      position="right"
+                      maxWidth={230}
+                    />
+                  </h3>
                   <div style={s.budgetList}>
                     {budgets.map(b => {
                       const pct = Math.min(b.utilization, 1);
@@ -433,7 +448,14 @@ export default function Dashboard() {
 
               {cashflow.length > 0 && cashflow.some(m => m.income > 0 || m.expenses > 0) && (
                 <>
-                  <h3 style={s.sectionTitle}>6-Month Cash Flow</h3>
+                  <h3 style={{ ...s.sectionTitle, display: 'flex', alignItems: 'center' }}>
+                    6-Month Cash Flow
+                    <InfoTooltip
+                      text="Compares your total income vs. total expenses for each of the last 6 months. Use this to spot months where you overspent or find trends in your spending."
+                      position="right"
+                      maxWidth={230}
+                    />
+                  </h3>
                   {(() => {
                     const light = document.documentElement.getAttribute('data-theme') === 'light';
                     return (
@@ -474,7 +496,14 @@ export default function Dashboard() {
       {activeTab === 'visa' && (
         <div>
           {/* Work hours tracker */}
-          <h3 style={s.sectionTitle}>Weekly work-hours tracker</h3>
+          <h3 style={{ ...s.sectionTitle, display: 'flex', alignItems: 'center' }}>
+            Weekly work-hours tracker
+            <InfoTooltip
+              text={'F-1 students: max 20 hrs/week on-campus during the semester. During breaks (summer/winter), you may work full-time (40 hrs). CPT/OPT students: full-time allowed.\n\nThis tracker is a quick check — it does not save data. For compliance records, keep your own log.'}
+              position="right"
+              maxWidth={260}
+            />
+          </h3>
           <div style={s.visaTracker}>
             <div style={s.formGroup}>
               <label style={s.label}>Your visa type</label>
