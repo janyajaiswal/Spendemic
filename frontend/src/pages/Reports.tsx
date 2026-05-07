@@ -256,7 +256,7 @@ export default function Reports() {
             <InfoTooltip
               text="Chronos-2 is a time-series AI model by Amazon that learns from your past spending to predict future expenses. It accounts for factors like rent, food, tuition, scholarship, and academic calendar events."
               position="bottom"
-              maxWidth={260}
+              maxWidth={340}
             />
           </p>
         </div>
@@ -375,7 +375,7 @@ export default function Reports() {
               <InfoTooltip
                 text="The shaded band shows the uncertainty range: low estimate (lower bound) to high estimate (upper bound). Wider bands mean less certainty — usually because you have less transaction history."
                 position="bottom"
-                maxWidth={250}
+                maxWidth={320}
               />
             </div>
           </div>
@@ -553,7 +553,7 @@ export default function Reports() {
                 <InfoTooltip
                   text="This breakdown shows what factors are driving the highest predicted spending period. Each line is a covariate (a variable the model uses) and its estimated dollar contribution to that week/month's total."
                   position="right"
-                  maxWidth={240}
+                  maxWidth={320}
                 />
               </div>
               {mi && (
@@ -604,7 +604,7 @@ export default function Reports() {
                 <InfoTooltip
                   text={'The model uses these values to build your forecast:\n• Forecast Setup ✓ — you entered this manually\n• auto-detected ✓ — pulled from your recurring transactions\n• live rate ✓ — fetched from a currency exchange API\n• missing — not set, reducing forecast accuracy'}
                   position="left"
-                  maxWidth={260}
+                  maxWidth={340}
                 />
               </div>
               {cs ? (
@@ -768,7 +768,7 @@ export default function Reports() {
                   <InfoTooltip
                     text={`Projects your savings (income − forecast spending) over the selected horizon.\n• Income is pulled from Forecast Setup / Settings\n• Spending is the forecast median\n• Cumulative line shows your running balance if the trend holds`}
                     position="right"
-                    maxWidth={250}
+                    maxWidth={320}
                   />
                 </div>
                 <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', opacity: 0.6, marginTop: 2 }}>
@@ -850,7 +850,7 @@ export default function Reports() {
                 <InfoTooltip
                   text="This projects your total spending from now until your graduation date. It uses the same Chronos-2 model with your academic calendar (breaks, tuition cycles, health insurance) factored in. After graduation, university costs are automatically removed."
                   position="right"
-                  maxWidth={260}
+                  maxWidth={340}
                 />
               </div>
               <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', opacity: 0.6 }}>
@@ -878,7 +878,7 @@ export default function Reports() {
             <InfoTooltip
               text={'A week-by-week breakdown of your actual spending.\n• 🏠 icon = week likely includes rent (starts 1st–5th of month)\n• ↑ orange = unusually high week (>1.5× standard deviation above your average)\n• vs. Avg = how this week compares to your personal average weekly spend'}
               position="top"
-              maxWidth={270}
+              maxWidth={340}
             />
           </div>
           <div style={{ overflowX: 'auto' }}>
@@ -949,7 +949,7 @@ export default function Reports() {
                 <InfoTooltip
                   text="Shows how your loan balance decreases month by month based on your monthly payment amount. Set your loan details in Settings → Profile to see this chart. Update 'total loan amount' and 'monthly payment' there."
                   position="right"
-                  maxWidth={250}
+                  maxWidth={320}
                 />
               </div>
               <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', marginTop: 2, opacity: 0.6 }}>

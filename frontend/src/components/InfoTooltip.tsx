@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import ReactDOM from 'react-dom';
 
 interface InfoTooltipProps {
   text: string;
@@ -6,51 +7,87 @@ interface InfoTooltipProps {
   maxWidth?: number;
 }
 
-export default function InfoTooltip({ text, position = 'top', maxWidth = 240 }: InfoTooltipProps) {
+export default function InfoTooltip({ text, position = 'top', maxWidth = 340 }: InfoTooltipProps) {
   const [visible, setVisible] = useState(false);
-  const ref = useRef<HTMLSpanElement>(null);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const iconRef = useRef<HTMLSpanElement>(null);
+
+  const computeCoords = () => {
+    if (!iconRef.current) return;
+    const r = iconRef.current.getBoundingClientRect();
+    const cx = r.left + window.scrollX + r.width / 2;
+    const cy = r.top + window.scrollY + r.height / 2;
+    switch (position) {
+      case 'top':    setCoords({ top: r.top  + window.scrollY - 8, left: cx }); break;
+      case 'bottom': setCoords({ top: r.bottom + window.scrollY + 8, left: cx }); break;
+      case 'left':   setCoords({ top: cy, left: r.left  + window.scrollX - 8 }); break;
+      case 'right':  setCoords({ top: cy, left: r.right + window.scrollX + 8 }); break;
+    }
+  };
+
+  const show = () => { computeCoords(); setVisible(true); };
+  const hide = () => setVisible(false);
 
   useEffect(() => {
     if (!visible) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setVisible(false);
+      if (iconRef.current && !iconRef.current.contains(e.target as Node)) setVisible(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [visible]);
 
-  const tipStyle: React.CSSProperties = {
-    position: 'absolute',
-    zIndex: 9999,
-    background: 'rgba(30,20,20,0.97)',
-    color: '#f5f0e8',
-    fontSize: '0.78rem',
-    lineHeight: '1.5',
-    padding: '8px 12px',
-    borderRadius: '8px',
-    width: maxWidth,       // explicit width so text wraps properly, not constrained by the 15px icon parent
-    maxWidth: '90vw',      // never overflow viewport on small screens
-    boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-    border: '1px solid rgba(255,215,0,0.15)',
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'normal',
-    overflowWrap: 'break-word',
-    pointerEvents: 'none',
-    ...(position === 'top'    && { bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6 }),
-    ...(position === 'bottom' && { top: '100%',    left: '50%', transform: 'translateX(-50%)', marginTop: 6 }),
-    ...(position === 'left'   && { right: '100%',  top: '50%',  transform: 'translateY(-50%)', marginRight: 6 }),
-    ...(position === 'right'  && { left: '100%',   top: '50%',  transform: 'translateY(-50%)', marginLeft: 6 }),
-  };
+  const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+
+  const transform = {
+    top:    'translateX(-50%) translateY(-100%)',
+    bottom: 'translateX(-50%)',
+    left:   'translateX(-100%) translateY(-50%)',
+    right:  'translateY(-50%)',
+  }[position];
+
+  const tooltip = visible ? ReactDOM.createPortal(
+    <span style={{
+      position: 'absolute',
+      top: coords.top,
+      left: coords.left,
+      transform,
+      zIndex: 99999,
+      // Solid color — portal renders at body level so parent opacity never bleeds through
+      background: isLight ? '#1c3a38' : '#0a2826',
+      color: '#e8f4f3',
+      fontSize: '0.78rem',
+      lineHeight: '1.6',
+      padding: '10px 14px',
+      borderRadius: '10px',
+      width: maxWidth,
+      maxWidth: '90vw',
+      boxShadow: '0 6px 24px rgba(0,0,0,0.55)',
+      border: `1px solid rgba(45,212,191,0.2)`,
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'normal',
+      overflowWrap: 'break-word',
+      pointerEvents: 'none',
+      // Explicit resets so no inherited textTransform/letterSpacing/fontWeight from parent headers
+      textTransform: 'none',
+      letterSpacing: 'normal',
+      fontWeight: 'normal',
+      opacity: 1,
+    }}>
+      {text}
+    </span>,
+    document.body
+  ) : null;
 
   return (
     <span
-      ref={ref}
       style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', verticalAlign: 'middle' }}
-      onMouseEnter={() => setVisible(true)}
-      onMouseLeave={() => setVisible(false)}
-      onClick={() => setVisible(v => !v)}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onClick={() => visible ? hide() : show()}
     >
       <span
+        ref={iconRef}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
@@ -74,7 +111,7 @@ export default function InfoTooltip({ text, position = 'top', maxWidth = 240 }: 
       >
         i
       </span>
-      {visible && <span style={tipStyle}>{text}</span>}
+      {tooltip}
     </span>
   );
 }

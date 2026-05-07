@@ -8,7 +8,7 @@
  *  3  Resources     — curated links/tips for int'l students (fill in copy)
  */
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/dashboard.css';
@@ -151,8 +151,12 @@ interface RecentTx {
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [searchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState(() => {
+    const t = searchParams.get('tab');
+    return ['overview', 'health', 'visa', 'resources'].includes(t ?? '') ? t! : 'overview';
+  });
   const [search, setSearch] = useState('');
   const [summary, setSummary] = useState<ComputedSummary | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
@@ -166,6 +170,12 @@ export default function Dashboard() {
   const [visaType, setVisaType] = useState(() => localStorage.getItem('visa_type') ?? 'F-1 (Academic)');
   const hoursCap = visaType === 'F-1 (Academic)' ? 20 : visaType === 'J-1 (Exchange Visitor)' ? 20 : 20;
   const [jobsTotalIncome, setJobsTotalIncome] = useState<number | null>(null);
+
+  // Sync tab when chatbot navigates to /dashboard?tab=...
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t && ['overview', 'health', 'visa', 'resources'].includes(t)) setActiveTab(t);
+  }, [searchParams]);
 
   useEffect(() => { localStorage.setItem('visa_hours', hoursWorked); }, [hoursWorked]);
   useEffect(() => { localStorage.setItem('visa_type', visaType); }, [visaType]);
@@ -430,7 +440,7 @@ export default function Dashboard() {
                 <InfoTooltip
                   text="Shows your income, expenses, and net savings for the current calendar month based on your logged transactions. Add transactions in the Transactions page to keep this up to date."
                   position="right"
-                  maxWidth={240}
+                  maxWidth={320}
                 />
               </h3>
               <div style={s.healthStrip}>
@@ -472,7 +482,7 @@ export default function Dashboard() {
                     <InfoTooltip
                       text={'Shows how much of each budget you\'ve used this month.\n• Green = under budget\n• Amber = approaching limit (80%+)\n• Red = exceeded\n\nSet and manage budgets in the Budgets page.'}
                       position="right"
-                      maxWidth={230}
+                      maxWidth={320}
                     />
                   </h3>
                   <div style={s.budgetList}>
@@ -506,7 +516,7 @@ export default function Dashboard() {
                     <InfoTooltip
                       text="Compares your total income vs. total expenses for each of the last 6 months. Use this to spot months where you overspent or find trends in your spending."
                       position="right"
-                      maxWidth={230}
+                      maxWidth={320}
                     />
                   </h3>
                   {(() => {
@@ -554,7 +564,7 @@ export default function Dashboard() {
             <InfoTooltip
               text={'F-1 students: max 20 hrs/week on-campus during the semester. During breaks (summer/winter), you may work full-time (40 hrs). CPT/OPT students: full-time allowed.\n\nThis tracker is a quick check — it does not save data. For compliance records, keep your own log.'}
               position="right"
-              maxWidth={260}
+              maxWidth={340}
             />
           </h3>
           <div style={s.visaTracker}>

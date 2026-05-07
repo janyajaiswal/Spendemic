@@ -24,11 +24,18 @@ interface ActionPayload {
   name?: string;
   target_amount?: number;
   deadline?: string | null;
+  // create_budget
+  limit_amount?: number;
+  period?: string;
 }
 
 interface PendingAction {
   payload: ActionPayload;
   label: string;
+}
+
+function getToken(): string {
+  return localStorage.getItem('spendemic_token') ?? '';
 }
 
 export default function ChatWidget() {
@@ -38,7 +45,7 @@ export default function ChatWidget() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      content: 'Hi! I\'m your Spendemic assistant. Ask me anything about budgeting, visa work rules, taxes, or just say "Add $45 food expense at Chipotle" to log a transaction.',
+      content: "Hi! I'm your Spendemic assistant. Ask me about budgets, visa rules, taxes, or say things like:\n• \"Add $45 food expense at Chipotle\"\n• \"Create a $500 laptop goal\"\n• \"Show me my spending forecast\"\n• \"How many hours can I work on F-1?\"",
     },
   ]);
   const [input, setInput] = useState('');
@@ -52,10 +59,9 @@ export default function ChatWidget() {
 
   if (!isAuthenticated) return null;
 
-  const token = user?.accessToken;
   const authHeaders = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${user?.accessToken ?? getToken()}`,
   };
 
   const send = async () => {
@@ -91,7 +97,7 @@ export default function ChatWidget() {
       setMessages([...newHistory, {
         role: 'assistant',
         content: msg.includes('503') || msg.includes('unavailable')
-          ? 'Chat is not configured yet. Ask the admin to set the API key.'
+          ? 'Chat is not configured yet — ask the admin to set the API key.'
           : `Sorry, something went wrong: ${msg}`,
       }]);
     } finally {
@@ -101,7 +107,9 @@ export default function ChatWidget() {
 
   const handleAction = (a: ActionPayload) => {
     if (a.action === 'navigate' && a.path) {
-      navigate(a.path);
+      // Handle paths with query params (/dashboard?tab=visa)
+      const [pathname, search] = a.path.split('?');
+      navigate({ pathname, search: search ? `?${search}` : '' });
       return;
     }
 
@@ -116,17 +124,25 @@ export default function ChatWidget() {
       setPendingAction({ payload: a, label });
       return;
     }
+
+    if (a.action === 'create_budget') {
+      const label = `Budget: ${a.category} — $${a.limit_amount}/${a.period ?? 'monthly'}`;
+      setPendingAction({ payload: a, label });
+      return;
+    }
   };
 
   const confirmAction = async () => {
     if (!pendingAction) return;
     const a = pendingAction.payload;
+    const token = user?.accessToken ?? getToken();
+    const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
 
     try {
       if (a.action === 'add_transaction') {
-        await fetch(`${API}/transactions`, {
+        const res = await fetch(`${API}/transactions`, {
           method: 'POST',
-          headers: authHeaders,
+          headers,
           body: JSON.stringify({
             amount: a.amount,
             currency: 'USD',
@@ -136,6 +152,10 @@ export default function ChatWidget() {
             transaction_date: new Date().toISOString().split('T')[0],
           }),
         });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { detail?: string }).detail || `${res.status}`);
+        }
         setMessages(prev => [...prev, {
           role: 'assistant',
           content: `Done! Added: ${pendingAction.label}`,
@@ -145,35 +165,61 @@ export default function ChatWidget() {
       if (a.action === 'create_goal') {
         const res = await fetch(`${API}/goals`, {
           method: 'POST',
-          headers: authHeaders,
+          headers,
           body: JSON.stringify({
             name: a.name,
             target_amount: a.target_amount,
             currency: 'USD',
-            deadline: a.deadline || null,
+            deadline: a.deadline ?? null,
           }),
         });
-        if (!res.ok) throw new Error('Goal creation failed');
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { detail?: string }).detail || 'Goal creation failed');
+        }
         setMessages(prev => [...prev, {
           role: 'assistant',
-          content: `Done! Your goal "${a.name}" for $${a.target_amount} has been created. You can track it on the Budgets page.`,
+          content: `Done! Goal "${a.name}" for $${a.target_amount} created. Track it on the Budgets page.`,
         }]);
       }
-    } catch {
+
+      if (a.action === 'create_budget') {
+        const res = await fetch(`${API}/budgets`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            category: a.category,
+            limit_amount: a.limit_amount,
+            currency: 'USD',
+            period: (a.period ?? 'monthly').toUpperCase(),
+            start_date: new Date().toISOString().split('T')[0],
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error((err as { detail?: string }).detail || 'Budget creation failed');
+        }
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `Done! ${a.category} budget of $${a.limit_amount}/${(a.period ?? 'monthly').toLowerCase()} created. Manage it on the Budgets page.`,
+        }]);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: 'Something went wrong. Try doing it manually from the app.',
+        content: `Something went wrong: ${msg}. Try doing it manually from the app.`,
       }]);
     }
 
     setPendingAction(null);
   };
 
-  const pendingLabel = pendingAction?.payload.action === 'add_transaction'
-    ? 'Add this transaction?'
-    : pendingAction?.payload.action === 'create_goal'
-    ? 'Create this goal?'
-    : 'Confirm?';
+  const pendingLabel =
+    pendingAction?.payload.action === 'add_transaction' ? 'Add this transaction?' :
+    pendingAction?.payload.action === 'create_goal'     ? 'Create this goal?' :
+    pendingAction?.payload.action === 'create_budget'   ? 'Create this budget?' :
+    'Confirm?';
 
   return (
     <>

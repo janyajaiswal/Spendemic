@@ -256,7 +256,7 @@ export default function Budgets() {
                   <InfoTooltip
                     text="This is your current month's net savings (income minus expenses). You can only fund goals when you have a positive surplus. Log transactions to keep this accurate."
                     position="top"
-                    maxWidth={240}
+                    maxWidth={320}
                   />
                 </span>
                 <span style={{ ...s.stripValue, color: netSavings > 0 ? '#4ade80' : '#888' }}>
@@ -383,7 +383,7 @@ export default function Budgets() {
             <InfoTooltip
               text="Number of categories where you've spent more than your set limit this month. Budgets reset at the start of each calendar month."
               position="top"
-              maxWidth={220}
+              maxWidth={320}
             />
           </span>
           <span style={{ ...s.stripValue, color: overCount > 0 ? '#f87171' : '#4ade80' }}>

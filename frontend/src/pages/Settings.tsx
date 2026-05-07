@@ -664,7 +664,7 @@ export default function Settings() {
                       <InfoTooltip
                         text="The currency your money originally comes from (e.g. INR if you're from India, CNY for China). Used to calculate exchange rate adjustments on your income."
                         position="right"
-                        maxWidth={230}
+                        maxWidth={320}
                       />
                     </label>
                     <select style={{ ...s.input, ...s.select }} value={form.home_currency} onChange={set('home_currency')}>
@@ -677,7 +677,7 @@ export default function Settings() {
                       <InfoTooltip
                         text="The currency you spend in day-to-day where you study (usually USD if you're in the US). All forecasts and budgets are shown in this currency."
                         position="right"
-                        maxWidth={230}
+                        maxWidth={320}
                       />
                     </label>
                     <select style={{ ...s.input, ...s.select }} value={form.study_country_currency} onChange={set('study_country_currency')}>
@@ -702,7 +702,7 @@ export default function Settings() {
                       <InfoTooltip
                         text="If you receive a scholarship, enter the amount per payment period. The forecast model uses this to adjust your effective income. Leave blank if you don't receive one — the model assumes $0."
                         position="top"
-                        maxWidth={240}
+                        maxWidth={320}
                       />
                     </label>
                     <input style={s.input} type="number" min="0" value={form.scholarship_amount}
@@ -738,7 +738,7 @@ export default function Settings() {
                       <InfoTooltip
                         text={'Your visa-allowed maximum work hours per week. This is used by the Visa & Work tracker to warn you when you\'re approaching your cap.\n\nF-1 on-campus: 20 hrs/semester\nF-1 during break: 40 hrs (full-time)\nOPT/CPT: varies by employer authorization\nJ-1: up to 20 hrs/week'}
                         position="top"
-                        maxWidth={250}
+                        maxWidth={320}
                       />
                     </label>
                     <input style={s.input} type="number" min="0" max="168" value={form.max_work_hours_per_week}
@@ -758,7 +758,7 @@ export default function Settings() {
                     <InfoTooltip
                       text={'Break dates tell the AI forecast model when your spending patterns change:\n• During summer/winter break: reduced food & activity costs, possible higher work hours\n• The model automatically reduces its prediction during break weeks\n\nLeave blank if you don\'t observe academic breaks.'}
                       position="right"
-                      maxWidth={260}
+                      maxWidth={340}
                     />
                   </p>
                   <p style={s.infoText}>
