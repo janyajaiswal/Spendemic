@@ -26,60 +26,6 @@ const TABS = [
   { id: 'resources', label: 'Resources' },
 ];
 
-// ─────────────────────────────────────────────────────
-// Feature card data for Overview tab
-// Fill in `desc` with your own copy.
-// ─────────────────────────────────────────────────────
-const FEATURES = [
-  {
-    title: 'Transactions',
-    desc: 'Log every dollar in and out — in any currency. Spendemic auto-converts to your working currency, flags duplicates, and supports recurring payments so you never miss a bill.',
-    link: '/transactions',
-    linkLabel: 'Go to Transactions',
-  },
-  {
-    title: 'Budgets & Goals',
-    desc: 'Set monthly or weekly spending caps by category. Live progress bars show how much you\'ve used, and you\'ll get alerts at 80% and 100%. Create savings goals and fund them from your monthly surplus.',
-    link: '/budgets',
-    linkLabel: 'Manage Budgets',
-  },
-  {
-    title: 'AI Forecasting',
-    desc: 'Amazon Chronos-2, a zero-shot probabilistic time-series model, predicts your future income and expenses using historical transactions plus your forecast context (rent, breaks, tuition).',
-    link: '/reports',
-    linkLabel: 'View Reports',
-  },
-  {
-    title: 'Multi-Currency',
-    desc: 'Live exchange rates keep every transaction accurate. Set a home currency and a working currency — Spendemic shows all three values side by side so you always know what you\'re spending.',
-    link: '/transactions',
-    linkLabel: 'Add Transaction',
-  },
-  {
-    title: 'Recurring Transactions',
-    desc: 'Mark rent, subscriptions, or stipends as recurring. The system automatically generates future entries on your chosen schedule (daily, weekly, bi-weekly, monthly, or annually).',
-    link: '/transactions',
-    linkLabel: 'See Transactions',
-  },
-  {
-    title: 'What-If Scenarios',
-    desc: 'Simulate hypothetical changes — a raise, an unexpected tuition bill, or a summer stipend — and instantly see the impact on your monthly net. Scenarios never touch your real data.',
-    link: '/transactions',
-    linkLabel: 'Try a Scenario',
-  },
-  {
-    title: 'Visa & Work Compliance',
-    desc: 'Track your weekly work hours against your visa cap (F-1 students: 20 hrs/wk on-campus during the semester). The Visa & Work tab gives a real-time compliance check.',
-    link: '/dashboard',
-    linkLabel: 'Check Compliance',
-  },
-  {
-    title: 'Smart Alerts',
-    desc: 'Rule-based notifications fire when any budget category hits 80% or exceeds its limit. Enable sound alerts for an audio chime whenever a new alert arrives — configurable per-device.',
-    link: '/settings',
-    linkLabel: 'Configure Alerts',
-  },
-];
 
 // ─────────────────────────────────────────────────────
 // Visa & Work tab — work-hours tracker + rule pointers
@@ -112,43 +58,60 @@ const VISA_RULES: { visa: string; rules: string[] }[] = [
   },
 ];
 
-// ─────────────────────────────────────────────────────
-// Resources tab sections
-// Fill in each tip or link yourself.
-// ─────────────────────────────────────────────────────
-const RESOURCE_SECTIONS: { title: string; items: { label: string; detail: string; href?: string }[] }[] = [
-  {
-    title: 'Banking & Finances',
-    items: [
-      { label: 'Open a US bank account as an international student', detail: 'Most banks require a passport, I-20/DS-2019, and an SSN or ITIN. Chase, Bank of America, and credit unions like SchoolsFirst are popular choices at CSUF.', href: 'https://www.bankofamerica.com/student-banking/' },
-      { label: 'Build US credit without a credit history', detail: 'Secured credit cards (Discover it Secured, Capital One) and credit-builder loans let you establish a credit score. Aim for a score above 700 before graduation.', href: 'https://www.discover.com/credit-cards/secured/' },
-      { label: 'Send money home cheaply (Wise, Remitly)', detail: 'Wise offers mid-market exchange rates with transparent fees — typically 5–10× cheaper than a bank wire. Remitly is fast for urgent transfers.', href: 'https://wise.com/' },
-    ],
-  },
-  {
-    title: 'Scholarships & Aid',
-    items: [
-      { label: 'CSUF International Student Scholarships', detail: 'CSUF\'s scholarship portal lists merit-based awards open to F-1/J-1 students. Apply each semester via the CSUF Scholarship Application.', href: 'https://www.fullerton.edu/financialaid/scholarships/' },
-      { label: 'CalFresh (food assistance) for eligible students', detail: 'Some international students with certain immigration statuses are eligible. Visit the Student Wellness Center or CAPS for a screener.', href: 'https://www.fullerton.edu/studentwellness/calfresh/' },
-      { label: 'ISSS Emergency Fund', detail: 'CSUF\'s International Student Services offers emergency micro-grants for students facing unexpected financial hardship.', href: 'https://www.fullerton.edu/isss/' },
-    ],
-  },
-  {
-    title: 'Tax & Legal',
-    items: [
-      { label: 'ITIN vs SSN — which do you need?', detail: 'F-1/J-1 students without work authorization need an ITIN (W-7 form) to file taxes. Students with CPT/OPT can apply for an SSN.', href: 'https://www.irs.gov/individuals/individual-taxpayer-identification-number' },
-      { label: 'Filing US taxes as an F-1 or J-1 student (Sprintax)', detail: 'International students are non-resident aliens for tax purposes (first 5 years on F-1). Sprintax is the IRS-endorsed software for non-resident tax returns.', href: 'https://www.sprintax.com/' },
-      { label: 'US tax treaty benefits by country', detail: 'Many countries have treaties with the US that reduce or eliminate withholding tax on scholarships and stipends. Check IRS Publication 901.', href: 'https://www.irs.gov/individuals/international-taxpayers/tax-treaty-tables' },
-    ],
-  },
-  {
-    title: 'Health & Insurance',
-    items: [
-      { label: 'CSUF Student Health Insurance (SHIP)', detail: 'CSUF requires health insurance coverage. The Student Health Insurance Plan (SHIP) is administered through Academic HealthPlans and covers most medical needs.', href: 'https://studenthealth.fullerton.edu/' },
-      { label: 'Medi-Cal eligibility for students', detail: 'Certain visa holders (including DACA, certain humanitarian statuses) may qualify for low-cost Medi-Cal coverage. Check Covered California for income-based options.', href: 'https://www.coveredca.com/' },
-    ],
-  },
-];
+function buildResourceSections(university: string) {
+  const uniSearch = (q: string) =>
+    `https://www.google.com/search?q=${encodeURIComponent((university ? university + ' ' : '') + q)}`;
+
+  return [
+    {
+      title: 'Banking & Finances',
+      items: [
+        { label: 'Open a US bank account as an international student', detail: 'Most banks require a passport, I-20/DS-2019, and an SSN or ITIN. Chase, Bank of America, and local credit unions are popular choices for international students.', href: 'https://www.bankofamerica.com/student-banking/' },
+        { label: 'Build US credit without a credit history', detail: 'Secured credit cards (Discover it Secured, Capital One) and credit-builder loans let you establish a credit score. Aim for a score above 700 before graduation.', href: 'https://www.discover.com/credit-cards/secured/' },
+        { label: 'Send money home cheaply (Wise, Remitly)', detail: 'Wise offers mid-market exchange rates with transparent fees — typically 5–10× cheaper than a bank wire. Remitly is fast for urgent transfers.', href: 'https://wise.com/' },
+      ],
+    },
+    {
+      title: 'Scholarships & Aid',
+      items: [
+        {
+          label: `${university ? university + ' I' : 'I'}nternational Student Scholarships`,
+          detail: university
+            ? `Search your school's scholarship portal for merit-based awards open to F-1/J-1 students.`
+            : 'Search your university\'s scholarship portal for merit-based awards open to F-1/J-1 students.',
+          href: uniSearch('international student scholarships'),
+        },
+        { label: 'CalFresh (food assistance) for eligible students', detail: 'Some international students with certain immigration statuses are eligible. Contact your campus Student Wellness Center for a screener.', href: 'https://www.cdss.ca.gov/calfresh' },
+        {
+          label: `${university ? university + ' ' : ''}ISSS Emergency Fund`,
+          detail: 'International Student Services offices often offer emergency micro-grants for students facing unexpected financial hardship. Check with your school\'s ISSS office.',
+          href: uniSearch('ISSS emergency fund international students'),
+        },
+      ],
+    },
+    {
+      title: 'Tax & Legal',
+      items: [
+        { label: 'ITIN vs SSN — which do you need?', detail: 'F-1/J-1 students without work authorization need an ITIN (W-7 form) to file taxes. Students with CPT/OPT can apply for an SSN.', href: 'https://www.irs.gov/individuals/individual-taxpayer-identification-number' },
+        { label: 'Filing US taxes as an F-1 or J-1 student (Sprintax)', detail: 'International students are non-resident aliens for tax purposes (first 5 years on F-1). Sprintax is the IRS-endorsed software for non-resident tax returns.', href: 'https://www.sprintax.com/' },
+        { label: 'US tax treaty benefits by country', detail: 'Many countries have treaties with the US that reduce or eliminate withholding tax on scholarships and stipends. Check IRS Publication 901.', href: 'https://www.irs.gov/individuals/international-taxpayers/tax-treaty-tables' },
+      ],
+    },
+    {
+      title: 'Health & Insurance',
+      items: [
+        {
+          label: `${university ? university + ' S' : 'S'}tudent Health Insurance (SHIP)`,
+          detail: university
+            ? `${university} may require health insurance coverage. Search your school's student health portal for plan details and enrollment.`
+            : 'Most US universities require health insurance. Check your university\'s student health portal for coverage options.',
+          href: uniSearch('student health insurance SHIP'),
+        },
+        { label: 'Medi-Cal eligibility for students', detail: 'Certain visa holders (including DACA, certain humanitarian statuses) may qualify for low-cost Medi-Cal coverage. Check Covered California for income-based options.', href: 'https://www.coveredca.com/' },
+      ],
+    },
+  ];
+}
 
 // ─────────────────────────────────────────────────────
 // Types for financial health data
@@ -181,6 +144,11 @@ function convert(amount: number, from: string, to: string, rates: Record<string,
 // ─────────────────────────────────────────────────────
 // Component
 // ─────────────────────────────────────────────────────
+interface RecentTx {
+  id: string; amount: string; currency: string; type: string;
+  category: string; description: string; transaction_date: string;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
 
@@ -190,6 +158,8 @@ export default function Dashboard() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loadingHealth, setLoadingHealth] = useState(false);
   const [cashflow, setCashflow] = useState<{ month: string; income: number; expenses: number }[]>([]);
+  const [recentTxs, setRecentTxs] = useState<RecentTx[]>([]);
+  const [university, setUniversity] = useState('');
 
   // Work-hours tracker state (visa tab) — persisted to localStorage
   const [hoursWorked, setHoursWorked] = useState(() => localStorage.getItem('visa_hours') ?? '');
@@ -211,9 +181,9 @@ export default function Dashboard() {
   }, [activeTab, user]);
 
   useEffect(() => {
-    if (activeTab !== 'health') return;
+    if (activeTab !== 'health' && activeTab !== 'overview') return;
     const token = user?.accessToken ?? localStorage.getItem('spendemic_token') ?? '';
-    if (!token) return; // not logged in yet — wait for user to load
+    if (!token) return;
     setSummary(null);
     setLoadingHealth(true);
     const today = new Date();
@@ -221,10 +191,11 @@ export default function Dashboard() {
 
     (async () => {
       try {
-        // 1. Get user's working currency
+        // 1. Get user's working currency + university
         const profileRes = await fetch(`${API}/users/me`, { headers: authHdr });
         const profileData = profileRes.ok ? await profileRes.json() : null;
         const workingCurrency: string = profileData?.study_country_currency ?? 'USD';
+        if (profileData?.university) setUniversity(profileData.university);
 
         // 2. Load exchange rates (no auth needed)
         const ratesRes = await fetch(`${API}/exchange-rates/${workingCurrency}`);
@@ -279,17 +250,17 @@ export default function Dashboard() {
           } catch { months.push({ month: label, income: 0, expenses: 0 }); }
         }
         setCashflow(months);
+
+        // 7. Fetch recent transactions for overview tab
+        const recentRes = await fetch(`${API}/transactions?limit=5`, { headers: authHdr });
+        if (recentRes.ok) setRecentTxs(await recentRes.json());
       } finally {
         setLoadingHealth(false);
       }
     })();
   }, [activeTab, user]);
 
-  // Search filters feature cards and resource items
   const q = search.toLowerCase();
-  const filteredFeatures = FEATURES.filter(f =>
-    !q || f.title.toLowerCase().includes(q) || f.desc.toLowerCase().includes(q)
-  );
 
   return (
     <div style={s.page}>
@@ -302,7 +273,7 @@ export default function Dashboard() {
         <div style={s.searchBox}>
           <input
             style={s.searchInput}
-            placeholder="Search features, tips, resources…"
+            placeholder="Search resources and tips…"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -325,34 +296,116 @@ export default function Dashboard() {
       {/* ── TAB: OVERVIEW ── */}
       {activeTab === 'overview' && (
         <div>
-          {/* Hero banner — fill in your own tagline */}
-          <div style={s.hero}>
-            <h2 style={s.heroTitle}>
-              {/* [Write your app tagline here — e.g. "Smart money management for international students"] */}
-              Smart money management for international students
-            </h2>
-            <p style={s.heroSub}>
-              Spendemic is an AI-powered financial planning app built specifically for international students. Track income and expenses in any currency, set budgets by category, and get probabilistic spending forecasts powered by Amazon Chronos-2 — all while staying on top of visa work-hour limits and scholarship deadlines. Unlike generic budgeting apps, Spendemic understands your world: tuition cycles, break periods, multi-currency remittances, and the financial pressures unique to studying abroad.
-            </p>
-          </div>
-
-          <h3 style={s.sectionTitle}>
-            {search ? `Results for "${search}"` : 'Everything Spendemic can do'}
-          </h3>
-          <div style={s.featureGrid}>
-            {filteredFeatures.map(f => (
-              <div key={f.title} className="dash-card" style={s.featureCard}>
-                <h4 style={s.featureTitle}>{f.title}</h4>
-                <p style={s.featureDesc}>{f.desc}</p>
-                <Link to={f.link} style={s.featureLink}>
-                  {f.linkLabel} →
-                </Link>
+          {loadingHealth ? (
+            <p style={s.loading}>Loading your snapshot…</p>
+          ) : (
+            <>
+              {/* Greeting + quick stats */}
+              <div style={s.overviewGreeting}>
+                <div>
+                  <h2 style={s.greetTitle}>
+                    {user?.name ? `Hi, ${user.name.split(' ')[0]}` : 'Welcome back'}
+                  </h2>
+                  <p style={s.greetSub}>
+                    {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })} snapshot
+                  </p>
+                </div>
+                <div style={s.quickActions}>
+                  <Link to="/transactions" style={s.qaBtn}>+ Add Transaction</Link>
+                  <Link to="/reports" style={{ ...s.qaBtn, background: 'rgba(255,215,0,0.08)', borderColor: 'rgba(255,215,0,0.25)', color: 'var(--highlight)' }}>View Forecast →</Link>
+                </div>
               </div>
-            ))}
-            {filteredFeatures.length === 0 && (
-              <p style={s.noResults}>No features match "{search}"</p>
-            )}
-          </div>
+
+              {/* Stats strip */}
+              {summary ? (
+                <div style={s.healthStrip}>
+                  {[
+                    { label: 'Income this month', value: summary.total_income, color: '#2dd4bf' },
+                    { label: 'Spent this month', value: summary.total_expenses, color: '#f59e0b' },
+                    { label: 'Net savings', value: summary.net, color: summary.net >= 0 ? '#2dd4bf' : '#f87171' },
+                  ].map(c => (
+                    <div key={c.label} className="dash-card" style={s.healthCard}>
+                      <span style={s.healthLabel}>{c.label}</span>
+                      <span style={{ ...s.healthValue, color: c.color }}>
+                        {summary.workingCurrency} {Math.abs(c.value).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        {c.label === 'Net savings' && summary.net < 0 && <span style={{ fontSize: '0.6em', opacity: 0.7 }}> deficit</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ ...s.healthStrip }}>
+                  {['Income this month', 'Spent this month', 'Net savings'].map(l => (
+                    <div key={l} className="dash-card" style={{ ...s.healthCard, opacity: 0.4 }}>
+                      <span style={s.healthLabel}>{l}</span>
+                      <span style={{ ...s.healthValue, color: 'var(--text-secondary)' }}>—</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Budget health strip */}
+              {budgets.length > 0 && (
+                <>
+                  <h3 style={s.sectionTitle}>Budget health</h3>
+                  <div style={s.budgetList}>
+                    {budgets.slice(0, 4).map(b => {
+                      const pct = Math.min(b.utilization, 1);
+                      const color = b.utilization >= 1 ? '#f87171' : b.utilization >= 0.8 ? '#fbbf24' : '#2dd4bf';
+                      return (
+                        <div key={b.id} style={s.budgetRow}>
+                          <span style={s.budgetCat}>{b.category.replace(/_/g, ' ')}</span>
+                          <div style={s.budgetBar}>
+                            <div style={{ ...s.budgetBarFill, width: `${pct * 100}%`, background: color }} />
+                          </div>
+                          <span style={{ ...s.budgetPct, color }}>{Math.round(b.utilization * 100)}%</span>
+                          <span style={s.budgetAmt}>{b.currency} {Number(b.spent).toFixed(0)} / {Number(b.limit_amount).toFixed(0)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {budgets.length > 4 && (
+                    <Link to="/budgets" style={s.seeAll}>+ {budgets.length - 4} more budgets →</Link>
+                  )}
+                </>
+              )}
+
+              {/* Recent activity */}
+              {recentTxs.length > 0 && (
+                <>
+                  <h3 style={s.sectionTitle}>Recent activity</h3>
+                  <div className="dash-card" style={{ borderRadius: 12, overflow: 'hidden' }}>
+                    {recentTxs.map((tx, i) => (
+                      <div key={tx.id} style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '12px 18px',
+                        borderBottom: i < recentTxs.length - 1 ? '1px solid var(--border)' : 'none',
+                      }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <span style={{ fontSize: '0.875em', color: 'var(--text-primary)', fontWeight: 500 }}>{tx.description || tx.category.replace(/_/g, ' ')}</span>
+                          <span style={{ fontSize: '0.72em', color: 'var(--text-secondary)', opacity: 0.55 }}>
+                            {tx.category.replace(/_/g, ' ')} · {new Date(tx.transaction_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                        <span style={{ fontWeight: 700, fontSize: '0.95em', color: tx.type === 'INCOME' ? '#2dd4bf' : '#f59e0b' }}>
+                          {tx.type === 'INCOME' ? '+' : '−'}{tx.currency} {Number(tx.amount).toFixed(2)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <Link to="/transactions" style={s.seeAll}>See all transactions →</Link>
+                </>
+              )}
+
+              {/* Empty state */}
+              {!summary && recentTxs.length === 0 && budgets.length === 0 && (
+                <div style={s.emptyHint}>
+                  <p style={{ marginBottom: 12 }}>No data yet — add your first transaction to get started.</p>
+                  <Link to="/transactions" style={s.seeAll}>Add Transaction →</Link>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -570,9 +623,10 @@ export default function Dashboard() {
       {activeTab === 'resources' && (
         <div>
           <p style={s.resourcesIntro}>
-            Curated guides and links for international students navigating finances in the US. Covers banking, scholarships, taxes, and health insurance — everything you need beyond the classroom.
+            Curated guides and links for international students navigating finances in the US.
+            {university && <span> Links are tailored for <strong>{university}</strong> — update your university in <Link to="/settings" style={{ color: 'var(--accent)' }}>Settings</Link> to see your school's resources.</span>}
           </p>
-          {RESOURCE_SECTIONS
+          {buildResourceSections(university)
             .filter(sec => !q || sec.title.toLowerCase().includes(q)
               || sec.items.some(i => i.label.toLowerCase().includes(q)))
             .map(sec => (
@@ -626,22 +680,19 @@ const s: Record<string, React.CSSProperties> = {
   tabActive: { opacity: 1, color: 'var(--highlight)', borderBottom: '2px solid var(--highlight)', fontWeight: 700 },
 
   // Overview
-  hero: {
-    background: 'rgba(255,227,180,0.04)',
-    border: '1px solid var(--border)', borderRadius: '14px',
-    padding: '32px', marginBottom: '32px',
+  overviewGreeting: {
+    display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
+    marginBottom: '24px', gap: '16px', flexWrap: 'wrap' as const,
   },
-  heroTitle: { fontSize: '1.4em', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 12px', letterSpacing: '-0.3px' },
-  heroSub: { color: 'var(--text-secondary)', opacity: 0.7, lineHeight: 1.7, margin: 0, fontSize: '0.875em' },
+  greetTitle: { fontSize: '1.3em', fontWeight: 700, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.3px' },
+  greetSub: { fontSize: '0.83em', color: 'var(--text-secondary)', opacity: 0.55, margin: '4px 0 0' },
+  quickActions: { display: 'flex', gap: '10px', flexWrap: 'wrap' as const },
+  qaBtn: {
+    padding: '9px 18px', background: 'rgba(45,212,191,0.1)', border: '1px solid rgba(45,212,191,0.3)',
+    borderRadius: '8px', color: '#2dd4bf', fontWeight: 600, fontSize: '0.83em', textDecoration: 'none',
+    cursor: 'pointer',
+  },
   sectionTitle: { fontSize: '0.7em', fontWeight: 700, color: 'var(--text-secondary)', opacity: 0.55, textTransform: 'uppercase', letterSpacing: '1px', margin: '24px 0 12px' },
-  featureGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: '16px' },
-  featureCard: {
-    borderRadius: '12px', padding: '22px', display: 'flex', flexDirection: 'column', gap: '10px',
-  },
-  featureTitle: { fontSize: '1em', fontWeight: 700, margin: 0, color: 'var(--text-primary)' },
-  featureDesc: { fontSize: '0.83em', color: 'var(--text-secondary)', opacity: 0.65, lineHeight: 1.6, flex: 1, margin: 0 },
-  featureLink: { fontSize: '0.83em', fontWeight: 600, textDecoration: 'none', color: 'var(--highlight)' },
-  noResults: { gridColumn: '1/-1', color: 'var(--text-secondary)', opacity: 0.5, textAlign: 'center' },
 
   // Health
   loading: { color: 'var(--text-secondary)', opacity: 0.5, fontSize: '0.875em' },

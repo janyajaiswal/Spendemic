@@ -166,8 +166,6 @@ export default function Sidebar() {
           {isDark ? <Sun size={15} /> : <Moon size={15} />}
           {isDark ? 'Light mode' : 'Dark mode'}
         </button>
-        <p className="sidebar-footer-text">Master's Project</p>
-        <p className="sidebar-footer-subtext">CPSC 597 • CSUF</p>
       </div>
     </div>
   );
