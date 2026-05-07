@@ -236,8 +236,11 @@ def _execute(history, monthly_labels, future_covariates, next_months, prediction
         predictions = _statistical_forecast(history, future_covariates, prediction_months)
         warnings.append("Using statistical forecast (trend + smoothing). AI forecasting with Chronos-2 requires running the local backend.")
 
-    for pred, (yr, mo) in zip(predictions, next_months):
+    for i, (pred, (yr, mo)) in enumerate(zip(predictions, next_months)):
         pred["year"], pred["month"] = yr, mo
+        # Attach projected income for each period so frontend can show savings outlook
+        cov = future_covariates[i] if i < len(future_covariates) else {}
+        pred["projected_income"] = round(float(cov.get("income_amount", 0)), 2)
 
     if cold_start:
         warnings.append("No transaction history yet — forecast anchored on your Forecast Setup data. Accuracy improves once you log real expenses.")
@@ -960,6 +963,8 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
             pred["week"] = iso_wk
         for pred, cov in zip(predictions, weekly_covariates):
             pred["factors"] = _build_factors_weekly(cov, history_base_weekly, bool(cov.get("_is_post_grad")))
+            monthly_inc = float(cov.get("income_amount", 0))
+            pred["projected_income"] = round(monthly_inc / (52 / 12), 2) if monthly_inc > 0 else 0.0
         return {
             "history": [
                 {"year": y, "week": w, "total": round(t, 2), "synthetic": cold_start and i == len(weekly_labels) - 1}
@@ -995,6 +1000,9 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
         pred["week"] = iso_wk
     for pred, cov in zip(predictions, weekly_covariates):
         pred["factors"] = _build_factors_weekly(cov, history_base_weekly, bool(cov.get("_is_post_grad")))
+        # Weekly income = monthly income ÷ 4.333
+        monthly_inc = float(cov.get("income_amount", 0))
+        pred["projected_income"] = round(monthly_inc / (52 / 12), 2) if monthly_inc > 0 else 0.0
 
     warnings = []
     if msg:

@@ -718,7 +718,7 @@ export default function Transactions() {
         <div style={s.tabs}>
           {(['ALL', 'INCOME', 'EXPENSE', 'RECURRING'] as const).map(t => (
             <button key={t} style={{ ...s.tab, ...(filterType === t ? s.tabActive : {}) }} onClick={() => setFilterType(t)}>
-              {t === 'ALL' ? 'All' : t === 'INCOME' ? 'Income' : t === 'EXPENSE' ? 'Expenses' : '↻ Fixed'}
+              {t === 'ALL' ? 'All' : t === 'INCOME' ? 'Income' : t === 'EXPENSE' ? 'Expenses' : '↻ Recurring'}
             </button>
           ))}
         </div>
@@ -761,7 +761,7 @@ export default function Transactions() {
             <div style={s.emptyIcon}>{filterType === 'RECURRING' ? '↻' : ''}</div>
             <p style={s.emptyText}>
               {filterType === 'RECURRING'
-                ? 'No fixed/recurring expenses this period. Mark a transaction as recurring to see it here.'
+                ? 'No recurring transactions this period. Mark a transaction as recurring to see it here.'
                 : 'No transactions for this period.'}
             </p>
             {filterType !== 'RECURRING' && <button style={s.addBtnSm} onClick={openAdd}><Plus size={14} /> Add one</button>}

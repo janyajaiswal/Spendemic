@@ -26,8 +26,9 @@ function weekLabel(year: number, week: number) {
   return `W${week} ${MONTH_NAMES[monday.getMonth()]}`;
 }
 function usd(n: number) {
-  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
+function round2(n: number) { return Math.round(n * 100) / 100; }
 
 // ─────────────────────────────────────────────────────
 // Types
@@ -38,7 +39,7 @@ interface PredictionFactors {
   health_insurance_added: number; income_reduction: number; travel_added: number;
   is_rent_week: boolean; post_graduation: boolean;
 }
-interface Prediction    { year: number; month?: number; week?: number; month_offset?: number; week_offset?: number; lower: number; median: number; upper: number; factors?: PredictionFactors }
+interface Prediction    { year: number; month?: number; week?: number; month_offset?: number; week_offset?: number; lower: number; median: number; upper: number; factors?: PredictionFactors; projected_income?: number }
 interface ModelInfo     { model_used: string; history_points: number; covariates_active: string[]; data_quality: 'good' | 'limited' | 'sparse' }
 interface CovariateSource { amount: number; source: 'user_setup' | 'detected_from_transactions' | 'auto_fetched' | 'missing' | 'assumed_zero' }
 interface ForecastResp  {
@@ -642,6 +643,199 @@ export default function Reports() {
               )}
             </Card>
           </div>
+        );
+      })()}
+
+      {/* ── Confidence Band Explanation ── */}
+      {forecast && !loading && forecast.predictions.length > 0 && (() => {
+        const preds = forecast.predictions;
+        const mi = forecast.model_info;
+        // Compute average band width as % of median across all predictions
+        const avgBandPct = preds.reduce((s, p) => s + (p.median > 0 ? (p.upper - p.lower) / p.median * 100 : 0), 0) / preds.length;
+        const uncertainty = avgBandPct > 100 ? 'high' : avgBandPct > 50 ? 'medium' : 'low';
+        const uncertaintyColor = uncertainty === 'high' ? '#f87171' : uncertainty === 'medium' ? '#f59e0b' : '#2dd4bf';
+        const histPts = mi?.history_points ?? 0;
+        const neededMore = Math.max(0, 6 - histPts);
+
+        // Explain WHY the band is wide
+        const reasons: string[] = [];
+        if (histPts < 4) reasons.push(`only ${histPts} month${histPts !== 1 ? 's' : ''} of history`);
+        else if (histPts < 6) reasons.push(`${histPts} months of history (6+ is ideal)`);
+        if (mi?.data_quality === 'sparse') reasons.push('sparse transaction data');
+        const highVariance = preds.some(p => p.median > 0 && (p.upper - p.lower) / p.median > 1.2);
+        if (highVariance) reasons.push('high variance in past spending');
+
+        return (
+          <Card style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em' }}>
+                    Understanding the Confidence Band
+                  </span>
+                  <span style={{
+                    fontSize: '0.72em', fontWeight: 700, borderRadius: 99, padding: '2px 10px',
+                    background: `${uncertaintyColor}18`, color: uncertaintyColor,
+                  }}>
+                    {uncertainty === 'high' ? 'High uncertainty' : uncertainty === 'medium' ? 'Medium uncertainty' : 'Low uncertainty'}
+                  </span>
+                </div>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.82em', lineHeight: 1.6, margin: '0 0 10px' }}>
+                  The shaded band around the forecast line is the <strong>likely spending range</strong> — not a worst-case scenario.
+                  The model predicts there's a ~60% chance your actual spending will land inside this band each {granularity === 'weekly' ? 'week' : 'month'}.
+                  {reasons.length > 0 && (
+                    <> The band is wide because of {reasons.join(' and ')}. It will tighten as you log more transactions.</>
+                  )}
+                </p>
+                {neededMore > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ flex: 1, height: 5, background: 'rgba(255,227,180,0.08)', borderRadius: 99 }}>
+                      <div style={{ height: '100%', width: `${Math.round((histPts / 6) * 100)}%`, background: uncertaintyColor, borderRadius: 99, transition: 'width 0.4s' }} />
+                    </div>
+                    <span style={{ fontSize: '0.75em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                      {histPts}/6 months — {neededMore} more for tighter bands
+                    </span>
+                  </div>
+                )}
+              </div>
+              {/* Band width table per period */}
+              <div style={{ fontSize: '0.78em', minWidth: 180 }}>
+                <div style={{ color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', fontSize: '0.7em', opacity: 0.6, marginBottom: 6 }}>
+                  Band width by period
+                </div>
+                {preds.slice(0, 5).map((p, i) => {
+                  const lbl = granularity === 'weekly' && p.week != null ? weekLabel(p.year, p.week) : monthLabel(p.year, p.month ?? 1);
+                  const bw = p.upper - p.lower;
+                  const pct = p.median > 0 ? Math.round(bw / p.median * 100) : 0;
+                  const barColor = pct > 100 ? '#f87171' : pct > 50 ? '#f59e0b' : '#2dd4bf';
+                  return (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{ color: 'var(--text-muted)', width: 56 }}>{lbl}</span>
+                      <div style={{ flex: 1, height: 4, background: 'rgba(255,227,180,0.07)', borderRadius: 99 }}>
+                        <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: barColor, borderRadius: 99 }} />
+                      </div>
+                      <span style={{ color: barColor, width: 36, textAlign: 'right' }}>±{Math.round(pct / 2)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </Card>
+        );
+      })()}
+
+      {/* ── Savings Outlook ── */}
+      {forecast && !loading && forecast.predictions.length > 0 && (() => {
+        const hasIncome = forecast.predictions.some(p => (p.projected_income ?? 0) > 0);
+        if (!hasIncome) return (
+          <Card style={{ marginBottom: 24 }}>
+            <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em', marginBottom: 6 }}>Savings Outlook</div>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.83em', opacity: 0.6, margin: 0 }}>
+              Set your income in Settings → Academic (or Forecast Setup) to see projected savings alongside your spending forecast.
+            </p>
+          </Card>
+        );
+
+        // Build period-by-period savings data
+        let cumSavings = 0;
+        const savingsData = forecast.predictions.map(p => {
+          const income = p.projected_income ?? 0;
+          const spending = p.median;
+          const savings = income - spending;
+          cumSavings += savings;
+          return {
+            label: granularity === 'weekly' && p.week != null ? weekLabel(p.year, p.week) : monthLabel(p.year, p.month ?? 1),
+            income: round2(income),
+            spending: round2(spending),
+            savings: round2(savings),
+            cumulative: round2(cumSavings),
+          };
+        });
+
+        const totalIncome   = savingsData.reduce((s, d) => s + d.income, 0);
+        const totalSpending = savingsData.reduce((s, d) => s + d.spending, 0);
+        const totalSavings  = totalIncome - totalSpending;
+        const savingsRate   = totalIncome > 0 ? Math.round((totalSavings / totalIncome) * 100) : 0;
+        const savingsColor  = totalSavings >= 0 ? '#2dd4bf' : '#f87171';
+        const light = document.documentElement.getAttribute('data-theme') === 'light';
+
+        return (
+          <Card style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 12 }}>
+              <div>
+                <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em', display: 'flex', alignItems: 'center' }}>
+                  Savings Outlook
+                  <InfoTooltip
+                    text={`Projects your savings (income − forecast spending) over the selected horizon.\n• Income is pulled from Forecast Setup / Settings\n• Spending is the forecast median\n• Cumulative line shows your running balance if the trend holds`}
+                    position="right"
+                    maxWidth={250}
+                  />
+                </div>
+                <div style={{ color: 'var(--text-secondary)', fontSize: '0.75em', opacity: 0.6, marginTop: 2 }}>
+                  Projected income minus forecast spending
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {[
+                  { label: 'Total Income', val: totalIncome, color: '#2dd4bf' },
+                  { label: 'Total Spending', val: totalSpending, color: '#f59e0b' },
+                  { label: 'Net Savings', val: totalSavings, color: savingsColor },
+                  { label: 'Savings Rate', val: null, display: `${savingsRate}%`, color: savingsColor },
+                ].map(c => (
+                  <div key={c.label} style={{ textAlign: 'right' }}>
+                    <div style={{ color: 'var(--text-secondary)', fontSize: '0.68em', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{c.label}</div>
+                    <div style={{ color: c.color, fontWeight: 700, fontSize: '1.1em' }}>
+                      {c.val !== null ? usd(c.val) : c.display}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <ResponsiveContainer width="100%" height={200}>
+              <ComposedChart data={savingsData} margin={{ top: 5, right: 12, left: 0, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke={light ? 'rgba(14,76,73,0.08)' : 'rgba(255,227,180,0.06)'} />
+                <XAxis dataKey="label" tick={{ fill: light ? 'rgba(14,76,73,0.5)' : 'rgba(236,199,176,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: light ? 'rgba(14,76,73,0.5)' : 'rgba(236,199,176,0.5)', fontSize: 10 }} axisLine={false} tickLine={false} width={52} tickFormatter={v => `$${(v / 1000).toFixed(1)}k`} />
+                <Tooltip
+                  contentStyle={{ background: light ? '#fff' : '#0d3533', border: `1px solid ${light ? 'rgba(14,76,73,0.15)' : 'rgba(255,227,180,0.1)'}`, borderRadius: 8, fontSize: 12 }}
+                  labelStyle={{ color: light ? '#0e4c49' : '#ffe3b4', fontWeight: 600 }}
+                  formatter={(v: unknown, name: unknown) => [`$${Number(v).toFixed(0)}`, String(name)]}
+                />
+                <Bar dataKey="income" name="Income" fill="#2dd4bf" opacity={0.7} radius={[3,3,0,0]} maxBarSize={32} />
+                <Bar dataKey="spending" name="Spending" fill="#f59e0b" opacity={0.7} radius={[3,3,0,0]} maxBarSize={32} />
+                <Line dataKey="cumulative" name="Cumulative savings" stroke={savingsColor} strokeWidth={2.5} dot={false} connectNulls />
+              </ComposedChart>
+            </ResponsiveContainer>
+
+            {/* Period breakdown table */}
+            <div style={{ overflowX: 'auto', marginTop: 16 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8em' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    {['Period', 'Income', 'Spending', 'Savings', 'Cumulative'].map(h => (
+                      <th key={h} style={{ textAlign: h === 'Period' ? 'left' : 'right', padding: '6px 10px', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.72em', textTransform: 'uppercase', letterSpacing: '0.5px', opacity: 0.6 }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {savingsData.map((d, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '7px 10px', color: 'var(--text-primary)' }}>{d.label}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', color: '#2dd4bf' }}>{usd(d.income)}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', color: '#f59e0b' }}>{usd(d.spending)}</td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', color: d.savings >= 0 ? '#2dd4bf' : '#f87171', fontWeight: 600 }}>
+                        {d.savings >= 0 ? '+' : ''}{usd(d.savings)}
+                      </td>
+                      <td style={{ padding: '7px 10px', textAlign: 'right', color: d.cumulative >= 0 ? 'var(--text-primary)' : '#f87171' }}>
+                        {d.cumulative >= 0 ? '+' : ''}{usd(d.cumulative)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
         );
       })()}
 

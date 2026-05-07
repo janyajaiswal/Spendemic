@@ -28,10 +28,13 @@ export default function InfoTooltip({ text, position = 'top', maxWidth = 240 }: 
     lineHeight: '1.5',
     padding: '8px 12px',
     borderRadius: '8px',
-    maxWidth,
+    width: maxWidth,       // explicit width so text wraps properly, not constrained by the 15px icon parent
+    maxWidth: '90vw',      // never overflow viewport on small screens
     boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
     border: '1px solid rgba(255,215,0,0.15)',
     whiteSpace: 'pre-wrap',
+    wordBreak: 'normal',
+    overflowWrap: 'break-word',
     pointerEvents: 'none',
     ...(position === 'top'    && { bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: 6 }),
     ...(position === 'bottom' && { top: '100%',    left: '50%', transform: 'translateX(-50%)', marginTop: 6 }),

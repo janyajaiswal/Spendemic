@@ -35,6 +35,8 @@ import warnings
 from datetime import date, timedelta
 from typing import Any
 
+import statistics as _stats
+
 import numpy as np
 import torch
 
@@ -145,34 +147,39 @@ def forecast(
             "in Forecast Setup so we can build a starting estimate."
         )
 
-    # ---- Build context tensor  [1, T] ----
-    # Covariates are appended to the history as a simple weighted adjustment.
-    # Full Chronos-2 native covariate API will be wired in Step 3 once we
-    # confirm the basic inference pipeline works end-to-end.
-    adjusted_history = _apply_covariates(history, future_covariates, prediction_months)
-    # Chronos-2 requires shape (n_series=1, n_variates=1, history_length)
+    # Clip one-off outlier months before Chronos sees the history.
+    # e.g. a single $6k security-deposit month out of 4 × $1.5k months would
+    # force the model's 80th-percentile prediction to ~$5.5k — forever.
+    clipped_history = _clip_history_outliers(history)
+    n_history = len(clipped_history)
+
+    adjusted_history = _apply_covariates(clipped_history, future_covariates, prediction_months)
     context = torch.tensor(adjusted_history, dtype=torch.float32).unsqueeze(0).unsqueeze(0)  # [1, 1, T]
 
-    # ---- Run inference ----
-    # quantile_levels: 0.1 = lower bound, 0.5 = median, 0.9 = upper bound
-    quantiles, mean = _PIPELINE.predict_quantiles(
+    # Use [0.2, 0.5, 0.8] instead of [0.1, 0.5, 0.9].
+    # The 60-pct interval ("likely range") is more useful for a student budget app
+    # than the 80-pct interval which balloons with sparse data.
+    quantiles, _ = _PIPELINE.predict_quantiles(
         inputs=context,
         prediction_length=prediction_months,
-        quantile_levels=[0.1, 0.5, 0.9],
+        quantile_levels=[0.2, 0.5, 0.8],
     )
-    # predict_quantiles returns a list of tensors, one per series in the batch.
-    # Take the first (only) series and squeeze to [prediction_length, n_quantiles].
     q = quantiles[0].squeeze().numpy()
     if q.ndim == 3:
-        q = q[0]  # drop variate dim if present → [prediction_length, 3]
+        q = q[0]
 
     results = []
     for i in range(prediction_months):
+        raw_lower  = float(max(float(q[i, 0]), 0.0))
+        raw_median = float(max(float(q[i, 1]), 0.0))
+        raw_upper  = float(max(float(q[i, 2]), 0.0))
+        # Post-process: prevent absurdly wide bands with sparse data
+        capped_lower, capped_upper = _cap_band(raw_lower, raw_median, raw_upper, n_history)
         results.append({
             "month_offset": i + 1,
-            "lower":  float(round(max(float(q[i, 0]), 0.0), 2)),
-            "median": float(round(max(float(q[i, 1]), 0.0), 2)),
-            "upper":  float(round(max(float(q[i, 2]), 0.0), 2)),
+            "lower":  capped_lower,
+            "median": round(raw_median, 2),
+            "upper":  capped_upper,
         })
     return results
 
@@ -201,6 +208,51 @@ def has_enough_data(history: list[float]) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _clip_history_outliers(history: list[float]) -> list[float]:
+    """
+    Cap extreme one-off spikes (moving deposits, large purchases) before Chronos sees
+    the history.  Without this, a single $6k month out of 4 × $1.5k months forces the
+    model to place 90th-percentile predictions at $5.5k — forever.
+
+    Rule: any value more than 3× the median is capped at 3× the median.
+    3× is permissive enough to preserve legitimate tuition months (typically 2–3×
+    base) while catching genuine outliers.  Applied only when ≥ 3 data points exist.
+    """
+    if len(history) < 3:
+        return history
+    med = _stats.median(history)
+    if med <= 0:
+        return history
+    ceiling = med * 3.0
+    return [min(v, ceiling) for v in history]
+
+
+def _cap_band(lower: float, median: float, upper: float, history_len: int) -> tuple[float, float]:
+    """
+    Post-process Chronos quantiles so the band never becomes absurdly wide.
+
+    The raw [0.2, 0.8] interval from Chronos can still blow out with sparse data.
+    We apply two guardrails:
+    1. Upper cap:  upper ≤ median × (2.0 + 0.1 × max(0, 6 − history_len))
+       → With 4 months of history the multiplier is 2.2; with 8+ it's 2.0.
+    2. Lower floor: lower ≥ median × 0.25  (spending rarely drops to near-zero)
+
+    Both guardrails relax as the user adds more history.
+    """
+    if median <= 0:
+        return lower, upper
+    # How sparse is the data?  Relaxation factor: extra headroom when < 6 pts
+    slack = max(0, 6 - history_len)  # 0–5
+    upper_multiplier = 2.0 + 0.1 * slack    # 2.0–2.5
+    lower_floor_pct  = max(0.15, 0.30 - 0.03 * slack)  # 0.15–0.30
+
+    capped_upper = min(upper, median * upper_multiplier)
+    capped_lower = max(lower, median * lower_floor_pct)
+    # Sanity: lower must not exceed median
+    capped_lower = min(capped_lower, median)
+    return round(capped_lower, 2), round(capped_upper, 2)
+
 
 def _apply_covariates(
     history: list[float],
@@ -307,13 +359,16 @@ def forecast_weekly(
             "Log some transactions or fill in Forecast Setup."
         )
 
-    adjusted = _apply_covariates_weekly(history, weekly_covariates or [], prediction_weeks)
+    clipped_history = _clip_history_outliers(history)
+    n_history = len(clipped_history)
+
+    adjusted = _apply_covariates_weekly(clipped_history, weekly_covariates or [], prediction_weeks)
     context = torch.tensor(adjusted, dtype=torch.float32).unsqueeze(0).unsqueeze(0)
 
     quantiles, _ = _PIPELINE.predict_quantiles(
         inputs=context,
         prediction_length=prediction_weeks,
-        quantile_levels=[0.1, 0.5, 0.9],
+        quantile_levels=[0.2, 0.5, 0.8],
     )
     q = quantiles[0].squeeze().numpy()
     if q.ndim == 3:
@@ -321,11 +376,15 @@ def forecast_weekly(
 
     results = []
     for i in range(prediction_weeks):
+        raw_lower  = float(max(float(q[i, 0]), 0.0))
+        raw_median = float(max(float(q[i, 1]), 0.0))
+        raw_upper  = float(max(float(q[i, 2]), 0.0))
+        capped_lower, capped_upper = _cap_band(raw_lower, raw_median, raw_upper, n_history)
         results.append({
             "week_offset": i + 1,
-            "lower":  float(round(max(float(q[i, 0]), 0.0), 2)),
-            "median": float(round(max(float(q[i, 1]), 0.0), 2)),
-            "upper":  float(round(max(float(q[i, 2]), 0.0), 2)),
+            "lower":  capped_lower,
+            "median": round(raw_median, 2),
+            "upper":  capped_upper,
         })
     return results
 
