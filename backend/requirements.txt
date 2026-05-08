@@ -13,6 +13,7 @@ python-multipart
 python-dateutil
 openpyxl
 pandas
+prophet
 anthropic
 openai
 better-profanity

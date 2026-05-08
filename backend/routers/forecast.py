@@ -381,9 +381,10 @@ def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=N
     ]
     chronos_available = chronos_model is not None and chronos_model._PIPELINE is not None
     lstm_available    = lstm_model is not None
+    _lstm_name = getattr(lstm_model, "MODEL_NAME", "prophet") if lstm_model else "statistical-fallback"
     _model_used = (
-        "chronos-t5-small"  if (model in ("auto", "chronos") and chronos_available) else
-        "lstm"              if (model == "lstm" or (model == "auto" and lstm_available)) else
+        "chronos-t5-small" if (model in ("auto", "chronos") and chronos_available) else
+        _lstm_name         if (model == "lstm" or (model == "auto" and lstm_available)) else
         "statistical-fallback"
     )
     model_info = {
@@ -996,9 +997,10 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session, model: str 
     ]
     chronos_available = chronos_model is not None and chronos_model._PIPELINE is not None
     lstm_available    = lstm_model is not None
+    _lstm_name_wk = getattr(lstm_model, "MODEL_NAME", "prophet") if lstm_model else "statistical-fallback"
     _model_used_wk = (
-        "chronos-t5-small"  if (model in ("auto", "chronos") and chronos_available) else
-        "lstm"              if (model == "lstm" or (model == "auto" and lstm_available)) else
+        "chronos-t5-small" if (model in ("auto", "chronos") and chronos_available) else
+        _lstm_name_wk      if (model == "lstm" or (model == "auto" and lstm_available)) else
         "statistical-fallback"
     )
     model_info = {
