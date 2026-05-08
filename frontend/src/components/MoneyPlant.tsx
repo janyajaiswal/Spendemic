@@ -18,19 +18,19 @@ const VINE_PATH = [
   'Q 44 32  40 18',    // tip
 ].join(' ');
 
-// Leaves spaced evenly at each arc peak
+// Leaves spaced evenly at each arc peak — varied tilts for natural look
 // [x, y, 'left'|'right', tilt-angle]
 const LEAVES: [number, number, 'left' | 'right', number][] = [
-  [27, 775, 'left',  -12],
-  [53, 705, 'right',  10],
-  [27, 635, 'left',  -8 ],
-  [53, 565, 'right',  14],
-  [27, 495, 'left',  -14],
-  [53, 425, 'right',  8 ],
-  [27, 355, 'left',  -10],
-  [53, 285, 'right',  12],
-  [27, 215, 'left',  -8 ],
-  [53, 145, 'right',  10],
+  [27, 775, 'left',  -22],
+  [53, 705, 'right',   7],
+  [27, 635, 'left',   -5],
+  [53, 565, 'right',  24],
+  [27, 495, 'left',  -17],
+  [53, 425, 'right',   4],
+  [27, 355, 'left',  -28],
+  [53, 285, 'right',  13],
+  [27, 215, 'left',   -9],
+  [53, 145, 'right',  19],
 ];
 
 function Leaf({ x, y, direction, angle }: { x: number; y: number; direction: 'left' | 'right'; angle: number }) {
@@ -56,7 +56,7 @@ function Leaf({ x, y, direction, angle }: { x: number; y: number; direction: 'le
   ];
 
   // Short petiole from vine to leaf base
-  const petLen = 4;
+  const petLen = 2;
   const petX = sign * petLen;
 
   return (
