@@ -17,15 +17,6 @@ export default function Landing() {
         <h2 className="landing-subtitle">AI Financial Guide App for International Students</h2>
         <p className="landing-tagline">One-stop solution for all things finance</p>
 
-        <div className="landing-illustration">
-          <div className="landing-illustration-icons">
-            <GraduationCap size={60} className="landing-illustration-icon" />
-            <BookOpen size={50} className="landing-illustration-icon" />
-            <Users size={55} className="landing-illustration-icon" />
-          </div>
-          <p className="landing-illustration-caption">Students on their way to success!</p>
-        </div>
-
         <Link to="/dashboard" className="landing-cta pulse">Get Started →</Link>
       </div>
 
