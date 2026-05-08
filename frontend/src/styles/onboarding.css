@@ -36,8 +36,9 @@
 }
 
 .onboarding-dot.active {
-  background: var(--accent);
-  transform: scale(1.3);
+  background: var(--highlight);
+  transform: scale(1.35);
+  animation: pulse 1.6s ease-in-out infinite;
 }
 
 [data-theme="light"] .onboarding-dot.active {
@@ -198,6 +199,7 @@
   text-align: center;
   margin-bottom: 16px;
   color: var(--accent);
+  animation: float 3s ease-in-out infinite;
 }
 
 [data-theme="light"] .onboarding-done-icon {

@@ -59,11 +59,11 @@ button {
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.12s ease;
 }
 
-button:hover { opacity: 0.88; }
-button:active { opacity: 0.75; }
+button:hover  { opacity: 0.88; transform: translateY(-1px); }
+button:active { opacity: 0.75; transform: scale(0.97); }
 
 /* ── Light theme ──────────────────────────────────────────────────────────── */
 [data-theme="light"] {
@@ -106,6 +106,17 @@ button:active { opacity: 0.75; }
   border-color: rgba(14, 76, 73, 0.2);
 }
 
+/* ── Input focus glow ────────────────────────────────────────────────────── */
+input:focus, select:focus, textarea:focus {
+  box-shadow: 0 0 0 3px rgba(255, 215, 0, 0.1);
+  outline: none;
+}
+[data-theme="light"] input:focus,
+[data-theme="light"] select:focus,
+[data-theme="light"] textarea:focus {
+  box-shadow: 0 0 0 3px rgba(14, 76, 73, 0.1);
+}
+
 /* ── Animations ───────────────────────────────────────────────────────────── */
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(20px); }
@@ -118,8 +129,98 @@ button:active { opacity: 0.75; }
   0%, 100% { transform: scale(1); }
   50%       { transform: scale(1.04); }
 }
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-7px); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(14px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes bellBounce {
+  0%, 100% { transform: rotate(0deg); }
+  15%       { transform: rotate(-20deg); }
+  35%       { transform: rotate(20deg); }
+  55%       { transform: rotate(-12deg); }
+  75%       { transform: rotate(10deg); }
+  90%       { transform: rotate(-5deg); }
+}
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%       { transform: translateX(-6px); }
+  40%       { transform: translateX(6px); }
+  60%       { transform: translateX(-4px); }
+  80%       { transform: translateX(4px); }
+}
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%       { box-shadow: 0 0 10px 2px rgba(255, 215, 0, 0.2); }
+}
+@keyframes coinSpin {
+  0%   { transform: rotateY(0deg) scale(1); }
+  50%  { transform: rotateY(180deg) scale(1.1); }
+  100% { transform: rotateY(360deg) scale(1); }
+}
+@keyframes barFillIn {
+  from { width: 0 !important; opacity: 0.4; }
+}
+@keyframes countBadgePop {
+  0%   { transform: scale(0.6); opacity: 0; }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1); opacity: 1; }
+}
 
 .fade-in { animation: fadeInUp 0.4s ease-out forwards; }
+
+/* ── Staggered entrance utility ─────────────────────────────────────────────── */
+.stagger-in {
+  opacity: 0;
+  animation: fadeInUp 0.35s ease-out both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+/* ── Card hover lift ─────────────────────────────────────────────────────── */
+.card-lift {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.card-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 215, 0, 0.22) !important;
+}
+[data-theme="light"] .card-lift:hover {
+  box-shadow: 0 8px 24px rgba(14, 76, 73, 0.12);
+  border-color: rgba(14, 76, 73, 0.35) !important;
+}
+
+/* ── Skeleton shimmer ────────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-card) 25%,
+    rgba(255, 227, 180, 0.07) 50%,
+    var(--bg-card) 75%
+  );
+  background-size: 1200px 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: 6px;
+}
+[data-theme="light"] .skeleton {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #fafafa 50%,
+    #f0f0f0 75%
+  );
+  background-size: 1200px 100%;
+}
+
+/* ── Tab slide-in ────────────────────────────────────────────────────────── */
+.tab-slide-in { animation: slideInRight 0.22s ease-out both; }
 
 /* ── Scrollbar ────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }

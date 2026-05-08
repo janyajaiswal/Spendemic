@@ -34,6 +34,7 @@ export default function Sidebar() {
   const { user, logout, isAuthenticated } = useAuth();
   const [alertItems, setAlertItems] = useState<AlertItem[]>([]);
   const [bellOpen, setBellOpen] = useState(false);
+  const [bellBouncing, setBellBouncing] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
   const [soundEnabled, setSoundEnabled] = useState(() => {
     try { return localStorage.getItem('spendemic_sound') !== 'false'; } catch { return true; }
@@ -52,6 +53,10 @@ export default function Sidebar() {
         .then(r => r.ok ? r.json() : [])
         .then((data: AlertItem[]) => {
           setAlertItems(data);
+          if (data.length > 0 && prevAlertCount.current === 0) {
+            setBellBouncing(true);
+            setTimeout(() => setBellBouncing(false), 800);
+          }
           if (soundEnabled && data.length > prevAlertCount.current && data.length > 0) {
             playChime();
           }
@@ -99,8 +104,11 @@ export default function Sidebar() {
   return (
     <div className="sidebar">
       <div className="sidebar-logo">
-        <Link to="/" className="sidebar-logo-text">Spendemic</Link>
-        <p className="sidebar-logo-subtext">AI Financial Guide</p>
+        <div className="logo-coin">$</div>
+        <div className="sidebar-logo-inner">
+          <Link to="/" className="sidebar-logo-text">Spendemic</Link>
+          <p className="sidebar-logo-subtext">AI Financial Guide</p>
+        </div>
         <div className="sidebar-logo-divider" />
       </div>
 
@@ -115,7 +123,7 @@ export default function Sidebar() {
 
       {isAuthenticated && alertItems.length > 0 && (
         <div ref={bellRef} style={{ position: 'relative' }}>
-          <button className="sidebar-bell-btn" onClick={() => setBellOpen(o => !o)}
+          <button className={`sidebar-bell-btn${bellBouncing ? ' bell-bounce' : ''}`} onClick={() => setBellOpen(o => !o)}
             title={`${alertItems.length} budget alert${alertItems.length > 1 ? 's' : ''}`}>
             <Bell size={18} />
             <span className="sidebar-bell-badge">{alertItems.length}</span>

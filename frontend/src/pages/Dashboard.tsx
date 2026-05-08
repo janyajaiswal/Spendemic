@@ -7,7 +7,7 @@
  *  2  Visa & Work   — work-hours tracker + visa rule pointers (fill in copy)
  *  3  Resources     — curated links/tips for int'l students (fill in copy)
  */
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { useAuth } from '../contexts/AuthContext';
@@ -176,6 +176,24 @@ function saveShifts(data: Record<string, Record<string, Shift[]>>) {
   localStorage.setItem('spendemic_shifts', JSON.stringify(data));
 }
 
+function useCountUp(target: number, duration = 900): number {
+  const [val, setVal] = useState(0);
+  const rafRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (rafRef.current) clearInterval(rafRef.current);
+    if (!target || target <= 0) { setVal(target); return; }
+    let current = 0;
+    const step = target / (duration / 16);
+    rafRef.current = setInterval(() => {
+      current += step;
+      if (current >= target) { setVal(target); clearInterval(rafRef.current!); }
+      else setVal(Math.round(current));
+    }, 16);
+    return () => { if (rafRef.current) clearInterval(rafRef.current); };
+  }, [target, duration]);
+  return val;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const [searchParams] = useSearchParams();
@@ -188,6 +206,11 @@ export default function Dashboard() {
   const [summary, setSummary] = useState<ComputedSummary | null>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loadingHealth, setLoadingHealth] = useState(false);
+
+  // Animated counters for stat cards
+  const animatedIncome   = useCountUp(summary?.total_income ?? 0);
+  const animatedExpenses = useCountUp(summary?.total_expenses ?? 0);
+  const animatedNet      = useCountUp(Math.abs(summary?.net ?? 0));
   const [cashflow, setCashflow] = useState<{ month: string; income: number; expenses: number }[]>([]);
   const [recentTxs, setRecentTxs] = useState<RecentTx[]>([]);
   const [university, setUniversity] = useState('');
@@ -366,7 +389,7 @@ export default function Dashboard() {
 
       {/* ── TAB: OVERVIEW ── */}
       {activeTab === 'overview' && (
-        <div>
+        <div className="tab-slide-in">
           {loadingHealth ? (
             <p style={s.loading}>Loading your snapshot…</p>
           ) : (
@@ -391,15 +414,15 @@ export default function Dashboard() {
               {summary ? (
                 <div style={s.healthStrip}>
                   {[
-                    { label: 'Income this month', value: summary.total_income, color: '#2dd4bf' },
-                    { label: 'Spent this month', value: summary.total_expenses, color: '#f59e0b' },
-                    { label: 'Net savings', value: summary.net, color: summary.net >= 0 ? '#2dd4bf' : '#f87171' },
-                  ].map(c => (
-                    <div key={c.label} className="dash-card" style={s.healthCard}>
+                    { label: 'Income this month', value: animatedIncome, raw: summary.total_income, color: '#2dd4bf' },
+                    { label: 'Spent this month', value: animatedExpenses, raw: summary.total_expenses, color: '#f59e0b' },
+                    { label: 'Net savings', value: animatedNet, raw: summary.net, color: summary.net >= 0 ? '#2dd4bf' : '#f87171' },
+                  ].map((c, i) => (
+                    <div key={c.label} className="dash-card stagger-in" style={{ ...s.healthCard, '--i': i } as React.CSSProperties}>
                       <span style={s.healthLabel}>{c.label}</span>
                       <span style={{ ...s.healthValue, color: c.color }}>
-                        {summary.workingCurrency} {Math.abs(c.value).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        {c.label === 'Net savings' && summary.net < 0 && <span style={{ fontSize: '0.6em', opacity: 0.7 }}> deficit</span>}
+                        {summary.workingCurrency} {c.value.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        {c.label === 'Net savings' && c.raw < 0 && <span style={{ fontSize: '0.6em', opacity: 0.7 }}> deficit</span>}
                       </span>
                     </div>
                   ))}
@@ -482,7 +505,7 @@ export default function Dashboard() {
 
       {/* ── TAB: FINANCIAL HEALTH ── */}
       {activeTab === 'health' && (
-        <div>
+        <div className="tab-slide-in">
           {loadingHealth ? (
             <p style={s.loading}>Loading your data…</p>
           ) : (
@@ -618,7 +641,7 @@ export default function Dashboard() {
 
       {/* ── TAB: VISA & WORK ── */}
       {activeTab === 'visa' && (
-        <div>
+        <div className="tab-slide-in">
           {/* ── Visa selector + compliance bar ── */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
             <div>
@@ -792,7 +815,7 @@ export default function Dashboard() {
 
       {/* ── TAB: RESOURCES ── */}
       {activeTab === 'resources' && (
-        <div>
+        <div className="tab-slide-in">
           <p style={s.resourcesIntro}>
             Curated guides and links for international students navigating finances in the US.
             {university && <span> Links are tailored for <strong>{university}</strong> — update your university in <Link to="/settings" style={{ color: 'var(--accent)' }}>Settings</Link> to see your school's resources.</span>}

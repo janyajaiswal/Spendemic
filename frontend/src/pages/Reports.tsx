@@ -600,10 +600,12 @@ export default function Reports() {
               </div>
               {mi && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                  <span style={{ fontSize: '0.75em', color: 'var(--text-muted)', opacity: 0.65 }}>
+                  <span className={mi.model_used === 'chronos-t5-small' ? 'model-chip-chronos' : mi.model_used === 'prophet' ? 'model-chip-prophet' : ''}
+                    style={{ fontSize: '0.75em', color: 'var(--text-muted)', opacity: 0.65, borderRadius: 99, padding: '1px 6px' }}>
                     {mi.model_used === 'prophet' ? 'Prophet (Meta)' : mi.model_used === 'lstm-fallback' ? 'LSTM fallback' : mi.model_used === 'chronos-t5-small' ? 'Chronos-2 (Amazon)' : mi.model_used}
                   </span>
-                  <span style={{ fontSize: '0.75em', color: qualityColor, background: `${qualityColor}18`, borderRadius: 99, padding: '1px 8px' }}>
+                  <span className={qualityLabel === 'Limited data' ? 'quality-badge-limited' : ''}
+                    style={{ fontSize: '0.75em', color: qualityColor, background: `${qualityColor}18`, borderRadius: 99, padding: '1px 8px' }}>
                     {qualityLabel}
                   </span>
                 </div>
@@ -646,7 +648,7 @@ export default function Reports() {
               <div style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10, opacity: 0.6, display: 'flex', alignItems: 'center' }}>
                 Where your data comes from
                 <InfoTooltip
-                  text={'The model uses these values to build your forecast:\n• Forecast Setup ✓ — you entered this manually\n• auto-detected ✓ — pulled from your transaction history\n• live rate ✓ — fetched from a currency exchange API\n• N/A — same currency — both currencies are USD; no conversion needed\n• missing — not set, reducing forecast accuracy'}
+                  text={'The model uses these values to build your forecast:\n• Forecast Setup ✓ — you entered this manually\n• auto-detected ✓ — pulled from your transaction history\n• live rate ✓ — fetched from a currency exchange API\n• N/A — same currency — no conversion needed (both currencies match)\n• unavailable — exchange rate API could not be reached\n• not set — optional field; only affects accuracy if you pay tuition directly\n• missing — not set, reducing forecast accuracy'}
                   position="left"
                   maxWidth={340}
                 />
@@ -659,17 +661,23 @@ export default function Reports() {
                       tuition_due: 'Tuition', scholarship_received: 'Scholarship',
                       exchange_rate: 'Exchange rate', hourly_rate: 'Hourly rate',
                     };
+                    const isMissingExchangeRate = field === 'exchange_rate' && info.source === 'missing';
+                    const isMissingTuition = field === 'tuition_due' && info.source === 'missing';
                     const srcColor = info.source === 'user_setup' ? '#2dd4bf'
                       : info.source === 'detected_from_transactions' ? '#f59e0b'
                       : info.source === 'auto_fetched' ? '#2dd4bf'
                       : info.source === 'assumed_zero' ? '#2dd4bf'
                       : info.source === 'not_applicable' ? '#6b7280'
+                      : isMissingExchangeRate ? '#f59e0b'
+                      : isMissingTuition ? '#6b7280'
                       : '#f87171';
                     const srcText = info.source === 'user_setup' ? 'Forecast Setup ✓'
                       : info.source === 'detected_from_transactions' ? 'auto-detected ✓'
                       : info.source === 'auto_fetched' ? 'live rate ✓'
                       : info.source === 'assumed_zero' ? '$0 assumed'
                       : info.source === 'not_applicable' ? 'N/A — same currency'
+                      : isMissingExchangeRate ? 'unavailable'
+                      : isMissingTuition ? 'not set'
                       : 'missing';
                     return (
                       <div key={field} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid var(--border)' }}>

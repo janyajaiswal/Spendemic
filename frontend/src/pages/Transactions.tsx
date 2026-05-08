@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import '../styles/transactions.css';
 import {
   Plus, Pencil, Trash2, TrendingUp, TrendingDown, X, Check,
@@ -780,14 +780,15 @@ export default function Transactions() {
                   </span>
                 )}
               </div>
-              {group.txs.map(tx => {
+              {group.txs.map((tx, txIdx) => {
                 const origAmt = parseFloat(tx.amount);
                 const workingAmt = convert(origAmt, tx.currency, workingCurrency);
                 const homeAmt = convert(origAmt, tx.currency, homeCurrency);
                 const showOrig = tx.currency !== workingCurrency;
                 const showHome = homeCurrency !== workingCurrency && tx.currency !== homeCurrency;
+                const txRowClass = `stagger-in ${tx.type === 'INCOME' ? 'tx-row-income' : 'tx-row-expense'}`;
                 return (
-                  <div key={tx.id} style={s.txRow}>
+                  <div key={tx.id} className={txRowClass} style={{ ...s.txRow, '--i': txIdx } as React.CSSProperties}>
                     <div style={s.txCatDot} />
                     <div style={s.txMeta}>
                       <span style={s.txCategory}>{CAT_LABEL[tx.category]}</span>
@@ -811,7 +812,7 @@ export default function Transactions() {
                       </div>
                     </div>
                     <div style={s.txRight}>
-                      <span style={{ ...s.txAmount, color: tx.type === 'INCOME' ? '#4ade80' : '#f87171' }}>
+                      <span className="tx-amount" style={{ ...s.txAmount, color: tx.type === 'INCOME' ? '#4ade80' : '#f87171' }}>
                         {tx.type === 'INCOME' ? '+' : '−'}{fmt(workingAmt, workingCurrency)}
                       </span>
                       <div style={s.txActions}>

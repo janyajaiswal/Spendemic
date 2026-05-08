@@ -31,7 +31,7 @@ import httpx
 from datetime import datetime, timezone
 
 from database import get_db
-from models import Transaction, ForecastContext, TransactionTypeEnum, User, ExchangeRateCache
+from models import Transaction, ForecastContext, TransactionTypeEnum, User, ExchangeRateCache, Job
 from routers.exchange_rates import _FALLBACK_RATES, _API_KEY, _PLACEHOLDER, _CACHE_TTL
 from routers.auth import get_current_user
 from schemas import ForecastRequest, ForecastResponse
@@ -358,7 +358,11 @@ def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=N
             cov["is_summer_break"] = 1
         if user and _month_in_break(user.winter_break_start, user.winter_break_end, f_mo):
             cov["is_winter_break"] = 1
-        _derive_income(cov, float(user.monthly_income) if user and user.monthly_income else None)
+        _fallback_income = (
+            float(user.monthly_income) if user and user.monthly_income
+            else _jobs_monthly_income(user_id, db)
+        )
+        _derive_income(cov, _fallback_income)
         # Post-graduation: zero all enrollment-tied costs (tuition, insurance, scholarships, break flags)
         if user and user.graduation_date and date(f_yr, f_mo, 1) > user.graduation_date:
             cov["tuition_due"] = 0.0
@@ -582,6 +586,21 @@ def _derive_income(cov: dict, fallback_monthly: float | None = None) -> None:
             cov["income_amount"] = float(fallback_monthly)
 
 
+def _jobs_monthly_income(user_id, db: Session) -> float | None:
+    """Sum monthly income across all active jobs for a user. Returns None if no jobs exist."""
+    try:
+        jobs = db.query(Job).filter(Job.user_id == user_id, Job.is_active == True).all()
+        if not jobs:
+            return None
+        total = sum(
+            float(j.hourly_rate) * float(j.hours_per_week) * _WEEKS_PER_MONTH
+            for j in jobs if j.hourly_rate and j.hours_per_week
+        )
+        return round(total, 2) if total > 0 else None
+    except Exception:
+        return None
+
+
 def _fetch_exchange_rate_sync(home_currency: str, study_currency: str, db: Session) -> float | None:
     """
     Fetch home→study exchange rate synchronously.
@@ -597,13 +616,16 @@ def _fetch_exchange_rate_sync(home_currency: str, study_currency: str, db: Sessi
     cutoff = now - _CACHE_TTL
 
     # Check DB cache
-    cached = db.query(ExchangeRateCache).filter(
-        ExchangeRateCache.from_currency == home,
-        ExchangeRateCache.to_currency == study,
-        ExchangeRateCache.fetched_at >= cutoff,
-    ).first()
-    if cached:
-        return float(cached.rate)
+    try:
+        cached = db.query(ExchangeRateCache).filter(
+            ExchangeRateCache.from_currency == home,
+            ExchangeRateCache.to_currency == study,
+            ExchangeRateCache.fetched_at >= cutoff,
+        ).first()
+        if cached:
+            return float(cached.rate)
+    except Exception:
+        pass
 
     # Live API fetch (synchronous)
     if _API_KEY not in _PLACEHOLDER:
@@ -956,7 +978,11 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session, model: str 
             cov["is_summer_break"] = 1
         if user and _month_in_break(user.winter_break_start, user.winter_break_end, f_mo):
             cov["is_winter_break"] = 1
-        _derive_income(cov, float(user.monthly_income) if user and user.monthly_income else None)
+        _fallback_income = (
+            float(user.monthly_income) if user and user.monthly_income
+            else _jobs_monthly_income(user_id, db)
+        )
+        _derive_income(cov, _fallback_income)
 
         # Post-graduation: zero all enrollment-tied costs
         is_post_grad = bool(user and user.graduation_date and date(f_yr, f_mo, 1) > user.graduation_date)

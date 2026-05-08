@@ -3,7 +3,7 @@
  * track live spend vs limit with colour-coded progress bars.
  * Also hosts the Goals tab for savings targets.
  */
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/budgets.css';
 
@@ -404,14 +404,21 @@ export default function Budgets() {
         </div>
       ) : (
         <div style={s.grid}>
-          {budgets.map(b => {
+          {budgets.map((b, idx) => {
             const pct = Math.min(b.utilization, 1);
             const spent = Number(b.spent);
             const limit = Number(b.limit_amount);
             const remaining = limit - spent;
-            const color = barColor(b.utilization);
+            const fillGradient =
+              b.utilization < 0.7  ? 'linear-gradient(90deg, #2dd4bf, #38bdf8)'
+              : b.utilization < 0.9 ? 'linear-gradient(90deg, #2dd4bf, #f59e0b)'
+              : b.utilization < 1   ? 'linear-gradient(90deg, #f59e0b, #f87171)'
+              :                       'linear-gradient(90deg, #f87171, #ef4444)';
+            const isOverspent = b.utilization >= 1;
             return (
-              <div key={b.id} className="budgets-inline-card" style={s.card}>
+              <div key={b.id}
+                className={`budgets-inline-card stagger-in${isOverspent ? ' overspent-shake' : ''}`}
+                style={{ ...s.card, '--i': idx } as React.CSSProperties}>
                 <div style={s.cardTop}>
                   <div style={s.cardMeta}>
                     <span style={s.cardCat}>{CAT_LABEL[b.category] ?? b.category}</span>
@@ -426,7 +433,7 @@ export default function Budgets() {
 
                 {/* Progress bar */}
                 <div style={s.barTrack}>
-                  <div style={{ ...s.barFill, width: `${pct * 100}%`, background: color }} />
+                  <div style={{ ...s.barFill, width: `${pct * 100}%`, backgroundImage: fillGradient, background: 'none' }} />
                 </div>
 
                 <div style={s.cardNums}>

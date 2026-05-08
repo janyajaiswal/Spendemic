@@ -238,3 +238,24 @@
 [data-theme="light"] .reports-card,
 [data-theme="light"] .reports-data-gate,
 [data-theme="light"] .reports-chart-wrap { border-color: rgba(14, 76, 73, 0.45); }
+
+/* ── Model chip glow ── */
+.model-chip-chronos {
+  animation: glowPulse 2.8s ease-in-out infinite;
+}
+.model-chip-prophet {
+  animation: model-glow-prophet 2.8s ease-in-out infinite;
+}
+@keyframes model-glow-prophet {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%       { box-shadow: 0 0 10px 2px rgba(139, 92, 246, 0.22); }
+}
+
+/* ── Data quality badge pulse for 'limited' ── */
+.quality-badge-limited {
+  animation: quality-glow-amber 2.2s ease-in-out infinite;
+}
+@keyframes quality-glow-amber {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50%       { box-shadow: 0 0 8px 2px rgba(245, 158, 11, 0.28); }
+}

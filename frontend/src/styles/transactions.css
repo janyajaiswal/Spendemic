@@ -187,9 +187,27 @@
   vertical-align: middle;
 }
 
-.transactions-table tr:hover td {
-  background: rgba(255, 227, 180, 0.02);
+.transactions-table tbody tr {
+  animation: fadeInUp 0.28s ease-out both;
+  animation-delay: calc(var(--row-i, 0) * 22ms);
 }
+
+.transactions-table tr:hover td {
+  background: rgba(255, 227, 180, 0.03);
+}
+
+/* Income / expense left-border accent */
+.tx-row-income { border-left: 3px solid rgba(45, 212, 191, 0.55); padding-left: 9px; }
+.tx-row-expense { border-left: 3px solid rgba(248, 113, 113, 0.3); padding-left: 9px; }
+
+/* Amount scale on row hover */
+.tx-amount {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+.tx-row-income:hover .tx-amount,
+.tx-row-expense:hover .tx-amount { transform: scale(1.06); }
+.transactions-table tr:hover .tx-amount { transform: scale(1.06); }
 
 /* ── Modal ── */
 .transactions-modal-overlay {

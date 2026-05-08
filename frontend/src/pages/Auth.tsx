@@ -164,7 +164,7 @@ export default function Auth() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? 'Sign in failed');
-      loginDirect({ sub: data.user.id, email: data.user.email, name: data.user.name, picture: '', accessToken: data.access_token });
+      loginDirect({ sub: data.user.id, email: data.user.email, name: data.user.name, picture: '', accessToken: data.access_token, onboarding_completed: data.user.onboarding_completed ?? false });
       navigate('/dashboard');
     } catch (err: unknown) {
       setErrors({ general: err instanceof Error ? err.message : 'Sign in failed' });
@@ -214,7 +214,7 @@ export default function Auth() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? 'Verification failed');
-      loginDirect({ sub: data.user.id, email: data.user.email, name: data.user.name, picture: '', accessToken: data.access_token });
+      loginDirect({ sub: data.user.id, email: data.user.email, name: data.user.name, picture: '', accessToken: data.access_token, onboarding_completed: data.user.onboarding_completed ?? false });
       navigate('/dashboard');
     } catch (err: unknown) {
       setErrors({ otp: err instanceof Error ? err.message : 'Verification failed' });
@@ -249,6 +249,8 @@ export default function Auth() {
 
   return (
     <div className="auth-container">
+      <div className="auth-orb auth-orb-1" />
+      <div className="auth-orb auth-orb-2" />
       <button className="auth-back-btn" onClick={() => navigate('/')}>
         <ArrowLeft size={18} /> Back to Home
       </button>
