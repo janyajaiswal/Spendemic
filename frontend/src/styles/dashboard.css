@@ -166,6 +166,8 @@
 .dash-card {
   background: var(--bg-card);
   border: 1px solid rgba(255, 215, 0, 0.12);
+  position: relative;
+  overflow: hidden;
 }
 
 [data-theme="light"] .dash-card {
@@ -175,4 +177,87 @@
 
 [data-theme="light"] .dash-card:hover {
   background: var(--card-gradient-hover) !important;
+}
+
+/* ── Dashboard hero greeting card ── */
+.dash-hero {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, rgba(255, 215, 0, 0.06) 0%, rgba(13, 53, 51, 0) 55%);
+  border: 1px solid rgba(255, 215, 0, 0.12);
+  border-radius: 16px;
+  padding: 24px 28px;
+  margin-bottom: 20px;
+}
+
+.dash-hero::before {
+  content: '$';
+  position: absolute;
+  right: 16px;
+  top: -18px;
+  font-size: 130px;
+  font-weight: 900;
+  color: rgba(255, 215, 0, 0.045);
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+}
+
+.dash-hero::after {
+  content: '';
+  position: absolute;
+  top: -50px;
+  left: -50px;
+  width: 180px;
+  height: 180px;
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.06), transparent 65%);
+  pointer-events: none;
+}
+
+[data-theme="light"] .dash-hero {
+  background: linear-gradient(135deg, rgba(14, 76, 73, 0.05) 0%, rgba(255, 255, 255, 0) 55%);
+  border-color: rgba(14, 76, 73, 0.18);
+}
+
+[data-theme="light"] .dash-hero::before {
+  color: rgba(14, 76, 73, 0.04);
+}
+
+/* ── Stat card decorative background icon ── */
+.dash-stat-bg-icon {
+  position: absolute;
+  bottom: -6px;
+  right: 10px;
+  font-size: 56px;
+  opacity: 0.07;
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+  filter: grayscale(0.2);
+}
+
+/* ── Section label with accent underline ── */
+.dash-section-label {
+  font-size: 0.68em;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.1px;
+  color: var(--text-secondary);
+  opacity: 0.55;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dash-section-label::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 215, 0, 0.2), transparent);
+  border-radius: 1px;
+}
+
+[data-theme="light"] .dash-section-label::after {
+  background: linear-gradient(90deg, rgba(14, 76, 73, 0.15), transparent);
 }

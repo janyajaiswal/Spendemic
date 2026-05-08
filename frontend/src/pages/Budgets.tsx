@@ -25,6 +25,12 @@ const CAT_LABEL: Record<string, string> = {
   OTHER: 'Other',
 };
 
+const CAT_EMOJI: Record<string, string> = {
+  FOOD: '🍕', RENT: '🏠', TRANSPORT: '🚌', UTILITIES: '💡',
+  HEALTHCARE: '💊', EDUCATION: '📚', ENTERTAINMENT: '🎬',
+  CLOTHING: '👗', PERSONAL_CARE: '✨', OTHER: '📦',
+};
+
 interface Budget {
   id: string;
   category: string;
@@ -409,14 +415,18 @@ export default function Budgets() {
               : b.utilization < 1   ? 'linear-gradient(90deg, #f59e0b, #f87171)'
               :                       'linear-gradient(90deg, #f87171, #ef4444)';
             const isOverspent = b.utilization >= 1;
+            const statusClass = isOverspent ? 'status-over' : b.utilization >= 0.9 ? 'status-warn' : 'status-ok';
             return (
               <div key={b.id}
-                className={`budgets-inline-card stagger-in${isOverspent ? ' overspent-shake' : ''}`}
+                className={`budgets-inline-card ${statusClass} stagger-in${isOverspent ? ' overspent-shake' : ''}`}
                 style={{ ...s.card, '--i': idx } as React.CSSProperties}>
                 <div style={s.cardTop}>
-                  <div style={s.cardMeta}>
-                    <span style={s.cardCat}>{CAT_LABEL[b.category] ?? b.category}</span>
-                    <span style={s.cardPeriod}>{b.period}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className="budget-cat-emoji">{CAT_EMOJI[b.category] ?? '📦'}</span>
+                    <div style={s.cardMeta}>
+                      <span style={s.cardCat}>{CAT_LABEL[b.category] ?? b.category}</span>
+                      <span style={s.cardPeriod}>{b.period}</span>
+                    </div>
                   </div>
                   <div style={s.cardActions}>
                     <button style={s.iconBtn} onClick={() => openEdit(b)}>✏️</button>

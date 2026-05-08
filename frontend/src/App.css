@@ -10,4 +10,10 @@
   width: 0;
   overflow-y: auto;
   background: var(--bg-main);
+  background-image: radial-gradient(rgba(255, 227, 180, 0.042) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+[data-theme="light"] .main-content {
+  background-image: radial-gradient(rgba(14, 76, 73, 0.042) 1px, transparent 1px);
 }

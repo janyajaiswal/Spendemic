@@ -395,18 +395,20 @@ export default function Dashboard() {
           ) : (
             <>
               {/* Greeting + quick stats */}
-              <div style={s.overviewGreeting}>
-                <div>
-                  <h2 style={s.greetTitle}>
-                    {user?.name ? `Hi, ${user.name.split(' ')[0]}` : 'Welcome back'}
-                  </h2>
-                  <p style={s.greetSub}>
-                    {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })} snapshot
-                  </p>
-                </div>
-                <div style={s.quickActions}>
-                  <Link to="/transactions" style={s.qaBtn}>+ Add Transaction</Link>
-                  <Link to="/reports" style={{ ...s.qaBtn, background: 'rgba(255,215,0,0.08)', borderColor: 'rgba(255,215,0,0.25)', color: 'var(--highlight)' }}>View Forecast →</Link>
+              <div className="dash-hero">
+                <div style={s.overviewGreeting}>
+                  <div>
+                    <h2 style={s.greetTitle}>
+                      {user?.name ? `Hi, ${user.name.split(' ')[0]} 👋` : 'Welcome back 👋'}
+                    </h2>
+                    <p style={s.greetSub}>
+                      {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })} snapshot
+                    </p>
+                  </div>
+                  <div style={s.quickActions}>
+                    <Link to="/transactions" style={s.qaBtn}>+ Add Transaction</Link>
+                    <Link to="/reports" style={{ ...s.qaBtn, background: 'rgba(255,215,0,0.08)', borderColor: 'rgba(255,215,0,0.25)', color: 'var(--highlight)' }}>View Forecast →</Link>
+                  </div>
                 </div>
               </div>
 
@@ -414,11 +416,12 @@ export default function Dashboard() {
               {summary ? (
                 <div style={s.healthStrip}>
                   {[
-                    { label: 'Income this month', value: animatedIncome, raw: summary.total_income, color: '#2dd4bf' },
-                    { label: 'Spent this month', value: animatedExpenses, raw: summary.total_expenses, color: '#f59e0b' },
-                    { label: 'Net savings', value: animatedNet, raw: summary.net, color: summary.net >= 0 ? '#2dd4bf' : '#f87171' },
+                    { label: 'Income this month', value: animatedIncome, raw: summary.total_income, color: '#2dd4bf', icon: '💵' },
+                    { label: 'Spent this month', value: animatedExpenses, raw: summary.total_expenses, color: '#f59e0b', icon: '🛍️' },
+                    { label: 'Net savings', value: animatedNet, raw: summary.net, color: summary.net >= 0 ? '#2dd4bf' : '#f87171', icon: summary.net >= 0 ? '🏦' : '📉' },
                   ].map((c, i) => (
                     <div key={c.label} className="dash-card stagger-in" style={{ ...s.healthCard, '--i': i } as React.CSSProperties}>
+                      <div className="dash-stat-bg-icon">{c.icon}</div>
                       <span style={s.healthLabel}>{c.label}</span>
                       <span style={{ ...s.healthValue, color: c.color }}>
                         {summary.workingCurrency} {c.value.toLocaleString('en-US', { minimumFractionDigits: 2 })}

@@ -65,6 +65,14 @@ const CAT_LABEL: Record<Category, string> = {
   SALARY: 'Salary', STIPEND: 'Stipend', SCHOLARSHIP: 'Scholarship', FINANCIAL_AID: 'Financial Aid',
   FAMILY_SUPPORT: 'Family Support', FREELANCE: 'Freelance', OTHER: 'Other',
 };
+
+const CAT_EMOJI: Record<string, string> = {
+  HOUSING: '🏠', FOOD: '🍕', TRANSPORTATION: '🚌', EDUCATION: '📚',
+  HEALTHCARE: '💊', ENTERTAINMENT: '🎬', SHOPPING: '🛍️', UTILITIES: '💡',
+  PERSONAL_CARE: '✨', TRAVEL: '✈️', SAVINGS: '🏦', SALARY: '💵',
+  STIPEND: '🎓', SCHOLARSHIP: '🎓', FINANCIAL_AID: '🤝', FAMILY_SUPPORT: '❤️',
+  FREELANCE: '💻', OTHER: '📦',
+};
 const FREQ_LABEL: Record<RecurFreq, string> = {
   DAILY: 'Daily', WEEKLY: 'Weekly', BI_WEEKLY: 'Bi-weekly',
   MONTHLY: 'Monthly', QUARTERLY: 'Quarterly', ANNUALLY: 'Annually',
@@ -789,7 +797,7 @@ export default function Transactions() {
                 const txRowClass = `stagger-in ${tx.type === 'INCOME' ? 'tx-row-income' : 'tx-row-expense'}`;
                 return (
                   <div key={tx.id} className={txRowClass} style={{ ...s.txRow, '--i': txIdx } as React.CSSProperties}>
-                    <div style={s.txCatDot} />
+                    <span className="tx-cat-emoji">{CAT_EMOJI[tx.category] ?? '📦'}</span>
                     <div style={s.txMeta}>
                       <span style={s.txCategory}>{CAT_LABEL[tx.category]}</span>
                       {tx.description && <span style={s.txDesc}>{tx.description}</span>}
@@ -872,7 +880,7 @@ export default function Transactions() {
               const amt = convert(parseFloat(sc.amount), sc.currency, workingCurrency);
               return (
                 <div key={sc.scenarioId} style={s.scenarioRow}>
-                  <div style={s.txCatDot} />
+                  <span className="tx-cat-emoji">{CAT_EMOJI[sc.category] ?? '📦'}</span>
                   <div style={s.scenarioRowMeta}>
                     <span style={s.scenarioRowLabel}>{sc.label}</span>
                     <span style={s.scenarioRowSub}>{CAT_LABEL[sc.category]}</span>

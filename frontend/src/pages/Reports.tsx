@@ -600,12 +600,23 @@ export default function Reports() {
               </div>
               {mi && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                  <span className={mi.model_used === 'chronos-t5-small' ? 'model-chip-chronos' : mi.model_used === 'prophet' ? 'model-chip-prophet' : ''}
-                    style={{ fontSize: '0.75em', color: 'var(--text-muted)', opacity: 0.65, borderRadius: 99, padding: '1px 6px' }}>
+                  <span
+                    className={mi.model_used === 'chronos-t5-small' ? 'model-chip-chronos' : mi.model_used === 'prophet' ? 'model-chip-prophet' : ''}
+                    style={{
+                      fontSize: '0.75em',
+                      fontWeight: 600,
+                      borderRadius: 99,
+                      padding: '3px 9px',
+                      ...(mi.model_used === 'chronos-t5-small'
+                        ? { color: '#ffd700', background: 'rgba(255,215,0,0.12)', border: '1px solid rgba(255,215,0,0.3)' }
+                        : mi.model_used === 'prophet'
+                        ? { color: '#a78bfa', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)' }
+                        : { color: 'var(--text-secondary)', background: 'rgba(255,227,180,0.06)', border: '1px solid var(--border)' }),
+                    }}>
                     {mi.model_used === 'prophet' ? 'Prophet (Meta)' : mi.model_used === 'lstm-fallback' ? 'LSTM fallback' : mi.model_used === 'chronos-t5-small' ? 'Chronos-2 (Amazon)' : mi.model_used}
                   </span>
                   <span className={qualityLabel === 'Limited data' ? 'quality-badge-limited' : ''}
-                    style={{ fontSize: '0.75em', color: qualityColor, background: `${qualityColor}18`, borderRadius: 99, padding: '1px 8px' }}>
+                    style={{ fontSize: '0.75em', fontWeight: 600, color: qualityColor, background: `${qualityColor}1a`, border: `1px solid ${qualityColor}40`, borderRadius: 99, padding: '3px 9px' }}>
                     {qualityLabel}
                   </span>
                 </div>

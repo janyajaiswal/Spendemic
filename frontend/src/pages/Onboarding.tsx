@@ -1,4 +1,5 @@
 import { useState, useContext } from 'react';
+import { Navigate } from 'react-router-dom';
 import { AuthContext } from '../contexts/AuthContext';
 import '../styles/onboarding.css';
 import { API } from '../lib/api';
@@ -47,6 +48,10 @@ export default function Onboarding() {
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
   const [data, setData] = useState<OnboardingData>({ ...EMPTY, name: user?.name || '' });
   const [saving, setSaving] = useState(false);
+
+  if ((user as any)?.onboarding_completed === true) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const token = user?.accessToken ?? localStorage.getItem('spendemic_token') ?? '';
   const authHdr = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };

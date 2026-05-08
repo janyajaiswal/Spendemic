@@ -200,6 +200,25 @@
 .tx-row-income { border-left: 3px solid rgba(45, 212, 191, 0.55); padding-left: 9px; }
 .tx-row-expense { border-left: 3px solid rgba(248, 113, 113, 0.3); padding-left: 9px; }
 
+/* Category emoji chip replacing the generic dot */
+.tx-cat-emoji {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 1em;
+  flex-shrink: 0;
+  background: rgba(255, 227, 180, 0.06);
+  border: 1px solid rgba(255, 227, 180, 0.08);
+  align-self: center;
+}
+[data-theme="light"] .tx-cat-emoji {
+  background: rgba(14, 76, 73, 0.05);
+  border-color: rgba(14, 76, 73, 0.08);
+}
+
 /* Amount scale on row hover */
 .tx-amount {
   display: inline-block;
