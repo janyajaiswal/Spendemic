@@ -47,7 +47,7 @@ try:
 except Exception:
     chronos_model = None  # type: ignore
 
-# LSTM fallback — pure numpy, always available.
+# Prophet / LSTM fallback — always available, no local machine needed.
 try:
     import lstm_model  # noqa: E402
 except Exception:
@@ -134,7 +134,7 @@ def run_forecast(
     prediction_months: int = Query(default=3, ge=1, le=12),
     prediction_weeks: int = Query(default=8, ge=1, le=52),
     granularity: Literal["weekly", "monthly"] = Query(default="weekly"),
-    model: str = Query(default="auto", description="Forecasting model: 'auto', 'chronos', or 'lstm'"),
+    model: str = Query(default="auto", description="Forecasting model: 'auto' (Chronos → Prophet fallback), 'chronos', or 'lstm' (Prophet)"),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:

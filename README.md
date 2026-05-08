@@ -13,7 +13,7 @@ A comprehensive AI-powered budgeting web application designed specifically for i
 
 This application helps international students manage their finances effectively by:
 
-- **Time-Series Forecasting**: Predicts future expenses using Amazon Chronos (primary) and LSTM (benchmark)
+- **Time-Series Forecasting**: Predicts future expenses using Amazon Chronos (primary, local) and Prophet by Meta (hosted fallback)
 - **Multi-Currency Support**: Handles multiple currencies with real-time exchange rates
 - **Budget Alerts**: Rule-based notifications for overspending and budget insights
 - **User Authentication**: Secure login via AWS Cognito
@@ -26,7 +26,7 @@ This application helps international students manage their finances effectively 
 - **Frontend**: React + Vite with TypeScript
 - **Backend**: FastAPI (Python 3.11)
 - **Database**: PostgreSQL (AWS RDS)
-- **ML Models**: Amazon Chronos (primary), LSTM (benchmark)
+- **ML Models**: Amazon Chronos (primary, local), Prophet by Meta (hosted fallback)
 - **AI Agent**: LangChain (deferred to final phase)
 - **Cloud**: AWS (Cognito, RDS, S3, CloudFront, SNS, EC2)
 - **Exchange Rates**: ExchangeRate-API (free tier)
@@ -37,7 +37,7 @@ This application helps international students manage their finances effectively 
 financial-planner/
 ├── frontend/          # React + Vite TypeScript app
 ├── backend/           # FastAPI application
-├── ml_models/         # Chronos and LSTM forecasting models
+├── ml_models/         # Chronos and Prophet forecasting models
 └── docs/              # Project documentation and proposal
 ```
 
@@ -87,9 +87,9 @@ alembic upgrade head
 
 Primary forecasting model for expense prediction. Outputs MAE and RMSE metrics.
 
-### LSTM
+### Prophet (Meta)
 
-Benchmark model for performance comparison with Chronos. Also outputs MAE and RMSE metrics.
+Hosted fallback model — runs on the production server without a GPU. Decomposes spending into trend + semester seasonality + covariate effects. Designed for small datasets (months, not years), making it ideal for student spending data. Activates automatically when Chronos is unavailable.
 
 ## 📝 Development Conventions
 
@@ -122,8 +122,8 @@ Benchmark model for performance comparison with Chronos. Also outputs MAE and RM
 ### Phase 3: ML Integration
 
 - Implement Chronos forecasting
-- Implement LSTM benchmark
-- Compare model performance
+- Implement Prophet hosted fallback
+- Covariate-aware prediction (rent, tuition, breaks, income)
 
 ### Phase 4: Advanced Features
 

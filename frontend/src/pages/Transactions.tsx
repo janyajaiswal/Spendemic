@@ -944,7 +944,7 @@ export default function Transactions() {
           <span style={{ fontSize: '0.75em', opacity: 0.5 }}>▸</span>
           <span>Forecast Setup</span>
           <span style={{ fontSize: '0.78em', opacity: 0.55, fontWeight: 400, marginLeft: '6px' }}>
-            — tell Chronos-2 about upcoming expenses &amp; breaks
+            — tell the AI forecast about upcoming expenses &amp; breaks
           </span>
           <InfoTooltip
             text={'Forecast Setup gives the AI model the information it can\'t detect automatically:\n• Rent, food, tuition amounts per month\n• Whether you\'re working and at what rate\n• Summer/winter break dates (when spending drops)\n• Health insurance and travel costs\n\nSet these once per year and the model uses them to predict your spending more accurately.'}

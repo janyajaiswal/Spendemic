@@ -1,5 +1,5 @@
 /**
- * Reports — Chronos-2 spending forecast with confidence bands + historical breakdown.
+ * Reports — AI spending forecast (Chronos-2 or Prophet) with confidence bands + historical breakdown.
  */
 import { useState, useEffect, useCallback } from 'react';
 import '../styles/reports.css';
