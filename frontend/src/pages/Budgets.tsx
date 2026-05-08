@@ -190,12 +190,6 @@ export default function Budgets() {
     loadGoals();
   };
 
-  const barColor = (u: number) => {
-    if (u >= 1) return '#f87171';       // over budget — red
-    if (u >= 0.8) return '#fbbf24';     // 80%+ — amber
-    return '#4ade80';                   // healthy — green
-  };
-
   const totalLimit = budgets.reduce((s, b) => s + Number(b.limit_amount), 0);
   const totalSpent = budgets.reduce((s, b) => s + Number(b.spent), 0);
   const overCount = budgets.filter(b => b.utilization >= 1).length;
@@ -437,7 +431,7 @@ export default function Budgets() {
                 </div>
 
                 <div style={s.cardNums}>
-                  <span style={{ color }}>
+                  <span style={{ color: isOverspent ? '#f87171' : b.utilization >= 0.9 ? '#fbbf24' : '#4ade80' }}>
                     {b.currency} {spent.toFixed(2)} spent
                   </span>
                   <span style={s.cardLimit}>of {b.currency} {limit.toFixed(2)}</span>
