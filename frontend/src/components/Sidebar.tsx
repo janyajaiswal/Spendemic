@@ -175,6 +175,36 @@ export default function Sidebar() {
           {isDark ? 'Light mode' : 'Dark mode'}
         </button>
       </div>
+
+      {/* Money plant growing along the sidebar border */}
+      <div className="sp-plant" aria-hidden="true">
+        <div className="sp-stem" />
+        <div className="sp-tip">🌱</div>
+
+        {/* Leaf layout: [top%, side, size, coin?] */}
+        {([
+          ['6%',  'left',  'sm', null ],
+          ['13%', 'right', 'md', null ],
+          ['21%', 'left',  'lg', '💚' ],
+          ['30%', 'right', 'sm', null ],
+          ['38%', 'left',  'md', null ],
+          ['47%', 'right', 'lg', '🪙' ],
+          ['55%', 'left',  'sm', null ],
+          ['63%', 'right', 'md', null ],
+          ['72%', 'left',  'lg', '💚' ],
+          ['80%', 'right', 'sm', null ],
+          ['88%', 'left',  'md', '🪙' ],
+          ['94%', 'right', 'sm', null ],
+        ] as [string, string, string, string | null][]).map(([top, side, size, coin], i) => (
+          <div
+            key={i}
+            className={`sp-leaf sp-${side} sp-${size}`}
+            style={{ top, animationDelay: `${(i * 0.28) % 2.8}s` }}
+          >
+            {coin && <span className="sp-coin">{coin}</span>}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
