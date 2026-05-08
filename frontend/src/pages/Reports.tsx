@@ -147,6 +147,7 @@ export default function Reports() {
   const fetchForecast = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setForecast(null);
     try {
       const forecastBase = await getForecastAPI();
       // LSTM always routes to the Render backend (API) — works even when local machine is off.
@@ -273,16 +274,12 @@ export default function Reports() {
           <div>
             <h2 style={{ color: 'var(--text-primary)', margin: 0, fontSize: '1.5em', fontWeight: 700, letterSpacing: '-0.3px' }}>Spending Reports & Forecast</h2>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.8em', margin: '2px 0 0', opacity: 0.65, display: 'flex', alignItems: 'center', gap: 4 }}>
-              {forecast?.model_info?.model_used === 'prophet'
+              {forecastModel === 'lstm'
                 ? 'Powered by Prophet · Meta\'s decomposable time-series model'
-                : forecast?.model_info?.model_used === 'lstm-fallback'
-                ? 'Powered by LSTM Neural Network · learned from your spending history'
                 : 'Powered by Amazon Chronos-2 · historical actuals + probabilistic predictions'}
               <InfoTooltip
-                text={forecast?.model_info?.model_used === 'prophet'
+                text={forecastModel === 'lstm'
                   ? 'Prophet is Meta\'s open-source time-series forecasting model. It decomposes your spending into trend + semester seasonality + calendar effects, and is specifically designed to work well with a few months of real-world data — outperforming neural nets on small datasets. Runs on the server, no GPU needed.'
-                  : forecast?.model_info?.model_used === 'lstm-fallback'
-                  ? 'LSTM (Long Short-Term Memory) is a neural network that trains directly on your spending history. It learns temporal patterns — trends, cycles, and covariate effects — without requiring a large pre-trained model.'
                   : 'Chronos-2 is a time-series AI model by Amazon that learns from your past spending to predict future expenses. It accounts for factors like rent, food, tuition, scholarship, and academic calendar events.'}
                 position="bottom"
                 maxWidth={340}
@@ -603,7 +600,9 @@ export default function Reports() {
               </div>
               {mi && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
-                  <span style={{ fontSize: '0.75em', color: 'var(--text-muted)', opacity: 0.65 }}>{mi.model_used}</span>
+                  <span style={{ fontSize: '0.75em', color: 'var(--text-muted)', opacity: 0.65 }}>
+                    {mi.model_used === 'prophet' ? 'Prophet (Meta)' : mi.model_used === 'lstm-fallback' ? 'LSTM fallback' : mi.model_used === 'chronos-t5-small' ? 'Chronos-2 (Amazon)' : mi.model_used}
+                  </span>
                   <span style={{ fontSize: '0.75em', color: qualityColor, background: `${qualityColor}18`, borderRadius: 99, padding: '1px 8px' }}>
                     {qualityLabel}
                   </span>
@@ -941,9 +940,10 @@ export default function Reports() {
               </thead>
               <tbody>
                 {(() => {
+                  if (!weeklySummary.length) return null;
                   const avg = weeklySummary.reduce((s, w) => s + w.total, 0) / weeklySummary.length;
                   const stdDev = Math.sqrt(weeklySummary.reduce((s, w) => s + (w.total - avg) ** 2, 0) / weeklySummary.length);
-                  const maxT = Math.max(...weeklySummary.map(w => w.total));
+                  const maxT = Math.max(...weeklySummary.map(w => w.total), 1);
                   const fmtDate = (s: string) => new Date(s + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                   return [...weeklySummary].reverse().map((w, i) => {
                     const pct = avg > 0 ? ((w.total - avg) / avg) * 100 : 0;
@@ -1037,10 +1037,12 @@ export default function Reports() {
               </thead>
               <tbody>
                 {(() => {
+                  if (!forecast.history.length) return null;
                   const avg = forecast.history.reduce((s, h) => s + h.total, 0) / forecast.history.length;
+                  const histMax = Math.max(...forecast.history.map(x => x.total), 1);
                   return [...forecast.history].reverse().map((h, i) => {
                     const pct = avg > 0 ? ((h.total - avg) / avg) * 100 : 0;
-                    const barW = Math.min(Math.abs(h.total / Math.max(...forecast.history.map(x => x.total))) * 100, 100);
+                    const barW = Math.min(Math.abs(h.total / histMax) * 100, 100);
                     return (
                       <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                         <td style={{ padding: '9px 10px', color: 'var(--text-primary)' }}>
