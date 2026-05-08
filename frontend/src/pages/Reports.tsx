@@ -149,10 +149,13 @@ export default function Reports() {
     setError(null);
     try {
       const forecastBase = await getForecastAPI();
+      // LSTM always routes to the Render backend (API) — works even when local machine is off.
+      // Chronos/auto routes through ngrok (local machine).
+      const baseUrl = forecastModel === 'lstm' ? API : forecastBase;
       const modelParam = `&model=${forecastModel}`;
       const url = granularity === 'weekly'
-        ? `${forecastBase}/forecast?granularity=weekly&prediction_weeks=${predWeeks}${modelParam}`
-        : `${forecastBase}/forecast?granularity=monthly&prediction_months=${predMonths}${modelParam}`;
+        ? `${baseUrl}/forecast?granularity=weekly&prediction_weeks=${predWeeks}${modelParam}`
+        : `${baseUrl}/forecast?granularity=monthly&prediction_months=${predMonths}${modelParam}`;
       const res = await fetch(url, { headers: forecastHeaders });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -160,6 +163,21 @@ export default function Reports() {
       }
       setForecast(await res.json());
     } catch (e) {
+      const isNetwork = e instanceof TypeError && (e.message === 'Failed to fetch' || e.message.includes('fetch'));
+      // Auto mode: if ngrok/local is unreachable, silently fall back to LSTM on Render
+      if (isNetwork && forecastModel === 'auto') {
+        try {
+          const fallbackUrl = granularity === 'weekly'
+            ? `${API}/forecast?granularity=weekly&prediction_weeks=${predWeeks}&model=lstm`
+            : `${API}/forecast?granularity=monthly&prediction_months=${predMonths}&model=lstm`;
+          const res2 = await fetch(fallbackUrl, { headers: forecastHeaders });
+          if (res2.ok) {
+            setForecast(await res2.json());
+            setLoading(false);
+            return;
+          }
+        } catch { /* fall through to error */ }
+      }
       const msg = e instanceof Error ? e.message : '';
       setError(msg || 'Failed to load forecast. Please try again.');
     } finally {
