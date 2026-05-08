@@ -1,118 +1,79 @@
 import { useEffect, useRef } from 'react';
 
-// Vine path — S-curve winding around the vertical border pole (center x=40 in 80px container)
-const VINE_PATH = `
-  M 40 845
-  C 40 830, 22 818, 16 800
-  C 10 782, 12 764, 26 752
-  C 38 741, 52 736, 58 720
-  C 64 704, 64 686, 52 672
-  C 40 658, 22 652, 14 636
-  C 6  620, 8  600, 22 588
-  C 34 577, 52 572, 62 558
-  C 72 544, 70 524, 58 512
-  C 46 500, 24 496, 14 482
-  C 4  468, 6  448, 18 436
-  C 30 424, 50 418, 62 406
-  C 74 394, 74 374, 60 362
-  C 48 350, 26 346, 16 332
-  C 6  318, 8  298, 22 286
-  C 34 275, 52 270, 62 256
-  C 72 242, 70 222, 56 210
-  C 44 200, 24 196, 16 182
-  C 8  168, 10 148, 26 136
-  C 40 125, 56 120, 62 106
-  C 68 92, 64 74, 52 62
-  C 42 52, 36 38, 38 18
-`.trim();
+// Tight S-curve vine — amplitude only ±13px from the pole center (x=40)
+// Using quadratic bezier Q so the control point IS the arc peak (where leaves attach)
+const VINE_PATH = [
+  'M 40 810',
+  'Q 27 775 40 740',   // left arc  → peak at (27, 775)
+  'Q 53 705 40 670',   // right arc → peak at (53, 705)
+  'Q 27 635 40 600',   // left arc  → peak at (27, 635)
+  'Q 53 565 40 530',   // right arc → peak at (53, 565)
+  'Q 27 495 40 460',   // left arc  → peak at (27, 495)
+  'Q 53 425 40 390',   // right arc → peak at (53, 425)
+  'Q 27 355 40 320',   // left arc  → peak at (27, 355)
+  'Q 53 285 40 250',   // right arc → peak at (53, 285)
+  'Q 27 215 40 180',   // left arc  → peak at (27, 215)
+  'Q 53 145 40 110',   // right arc → peak at (53, 145)
+  'Q 33 80  40 50',    // small final left
+  'Q 44 32  40 18',    // tip
+].join(' ');
 
-// Leaf definitions: [x, y, direction, angle, size, leafDelay]
-// direction: 'left' = leaf grows leftward, 'right' = rightward
-// angle: slight tilt in degrees
-const LEAVES: Array<[number, number, 'left' | 'right', number, number, number]> = [
-  [16,  800, 'left',   15, 1.05, 0.8 ],
-  [58,  720, 'right', -10, 0.9,  1.0 ],
-  [14,  636, 'left',   10, 1.1,  1.2 ],
-  [62,  558, 'right', -15, 0.95, 1.4 ],
-  [14,  482, 'left',   12, 1.0,  1.6 ],
-  [62,  406, 'right', -8,  1.1,  1.8 ],
-  [16,  332, 'left',   18, 0.95, 2.0 ],
-  [62,  256, 'right', -12, 1.0,  2.2 ],
-  [16,  182, 'left',   10, 0.9,  2.4 ],
-  [62,  106, 'right', -15, 0.85, 2.6 ],
+// Leaves spaced evenly at each arc peak
+// [x, y, 'left'|'right', tilt-angle]
+const LEAVES: [number, number, 'left' | 'right', number][] = [
+  [27, 775, 'left',  -12],
+  [53, 705, 'right',  10],
+  [27, 635, 'left',  -8 ],
+  [53, 565, 'right',  14],
+  [27, 495, 'left',  -14],
+  [53, 425, 'right',  8 ],
+  [27, 355, 'left',  -10],
+  [53, 285, 'right',  12],
+  [27, 215, 'left',  -8 ],
+  [53, 145, 'right',  10],
 ];
 
-interface LeafProps {
-  x: number;
-  y: number;
-  direction: 'left' | 'right';
-  angle: number;
-  size: number;
-  delay: number;
-}
-
-function Leaf({ x, y, direction, angle, size, delay }: LeafProps) {
-  const s = size;
-  const w = 32 * s;   // leaf half-width (from base to tip)
-  const h = 14 * s;   // leaf half-height
-  const petLen = 6 * s;
-
+function Leaf({ x, y, direction, angle }: { x: number; y: number; direction: 'left' | 'right'; angle: number }) {
   const sign = direction === 'right' ? 1 : -1;
+  const w = 22;   // leaf length
+  const h = 9;    // leaf half-height
 
-  // Leaf body path (base at 0,0, tip at sign*w)
-  const leafPath = `
-    M 0 0
-    C ${sign*w*0.22} ${-h},
-      ${sign*w*0.68} ${-h*1.1},
-      ${sign*w} ${-h*0.08}
-    Q ${sign*(w+1)} 0 ${sign*w} ${h*0.08}
-    C ${sign*w*0.68} ${h*1.1},
-      ${sign*w*0.22} ${h},
-      0 0
-    Z
-  `.trim();
+  // Pointed oval leaf: base at origin, tip at sign*w
+  const body = `M 0 0 Q ${sign * w * 0.38} ${-h} ${sign * w} 0 Q ${sign * w * 0.38} ${h} 0 0`;
 
-  // Midrib
-  const midRib = `M 0 0 L ${sign * w * 0.92} 0`;
-
-  // Secondary veins (4 pairs, upper and lower)
-  const veins: [number, number, number, number][] = [
-    [sign*w*0.18, 0, sign*w*0.28, -h*0.6 ],
-    [sign*w*0.35, 0, sign*w*0.46, -h*0.72],
-    [sign*w*0.52, 0, sign*w*0.62, -h*0.65],
-    [sign*w*0.65, 0, sign*w*0.73, -h*0.5 ],
-    [sign*w*0.18, 0, sign*w*0.28,  h*0.6 ],
-    [sign*w*0.35, 0, sign*w*0.46,  h*0.72],
-    [sign*w*0.52, 0, sign*w*0.62,  h*0.65],
-    [sign*w*0.65, 0, sign*w*0.73,  h*0.5 ],
+  // Veins: midrib + 3 pairs of side veins
+  const veins = [
+    // midrib
+    [0, 0, sign * w * 0.88, 0],
+    // upper side veins
+    [sign * w * 0.22, -0.5, sign * w * 0.32, -h * 0.58],
+    [sign * w * 0.44, -0.5, sign * w * 0.55, -h * 0.65],
+    [sign * w * 0.62, -0.5, sign * w * 0.70, -h * 0.52],
+    // lower side veins
+    [sign * w * 0.22,  0.5, sign * w * 0.32,  h * 0.58],
+    [sign * w * 0.44,  0.5, sign * w * 0.55,  h * 0.65],
+    [sign * w * 0.62,  0.5, sign * w * 0.70,  h * 0.52],
   ];
 
+  // Short petiole from vine to leaf base
+  const petLen = 4;
+  const petX = sign * petLen;
+
   return (
-    <g
-      transform={`translate(${x}, ${y}) rotate(${angle * sign * -1})`}
-      className="mp-leaf"
-      style={{ animationDelay: `${delay}s` }}
-    >
+    <g transform={`translate(${x},${y}) rotate(${angle * sign * -1})`}>
       {/* Petiole */}
-      <line
-        x1="0" y1="0"
-        x2={sign * petLen} y2="0"
-        stroke="#22c55e" strokeWidth="1.8" strokeLinecap="round"
-      />
+      <line x1="0" y1="0" x2={petX} y2="0"
+        stroke="#4a7040" strokeWidth="1.4" strokeLinecap="round" />
       {/* Leaf body */}
-      <g transform={`translate(${sign * petLen}, 0)`}>
-        <path
-          d={leafPath}
-          fill="url(#mpLeafGrad)"
-          stroke="#16a34a"
-          strokeWidth="0.6"
-        />
-        {/* Midrib */}
-        <path d={midRib} stroke="#15803d" strokeWidth="0.9" opacity="0.75" fill="none"/>
-        {/* Secondary veins */}
-        {veins.map(([x1,y1,x2,y2], i) => (
-          <line key={i} x1={x1} y1={y1} x2={x2} y2={y2}
-            stroke="#16a34a" strokeWidth="0.55" opacity="0.55"/>
+      <g transform={`translate(${petX},0)`}>
+        <path d={body} fill="url(#mpLeafGrad)" stroke="#3a5e32" strokeWidth="0.5" />
+        {/* Veins */}
+        {veins.map(([x1, y1, x2, y2], i) => (
+          <line key={i}
+            x1={x1} y1={y1} x2={x2} y2={y2}
+            stroke="#3a5e32" strokeWidth={i === 0 ? 0.75 : 0.45}
+            opacity={i === 0 ? 0.65 : 0.4}
+          />
         ))}
       </g>
     </g>
@@ -125,12 +86,11 @@ export default function MoneyPlant() {
   useEffect(() => {
     const vine = vineRef.current;
     if (!vine) return;
-    const length = vine.getTotalLength();
-    vine.style.strokeDasharray = `${length}`;
-    vine.style.strokeDashoffset = `${length}`;
-    // Trigger the grow animation on next frame
+    const len = vine.getTotalLength();
+    vine.style.strokeDasharray = `${len}`;
+    vine.style.strokeDashoffset = `${len}`;
     requestAnimationFrame(() => {
-      vine.style.transition = 'stroke-dashoffset 3.5s cubic-bezier(0.4, 0, 0.2, 1) 0.2s';
+      vine.style.transition = 'stroke-dashoffset 3.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) 0.3s';
       vine.style.strokeDashoffset = '0';
     });
   }, []);
@@ -139,7 +99,7 @@ export default function MoneyPlant() {
     <div
       style={{
         position: 'fixed',
-        left: '192px',       // centers 80px container on 232px sidebar border
+        left: '192px',
         top: 0,
         height: '100vh',
         width: '80px',
@@ -157,94 +117,61 @@ export default function MoneyPlant() {
         style={{ overflow: 'visible' }}
       >
         <defs>
-          {/* Leaf gradient: bright highlight → rich green → deep green */}
-          <linearGradient id="mpLeafGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%"   stopColor="#86efac" />
-            <stop offset="35%"  stopColor="#4ade80" />
-            <stop offset="70%"  stopColor="#22c55e" />
-            <stop offset="100%" stopColor="#16a34a" />
-          </linearGradient>
+          {/* Muted, realistic leaf gradient — dark at edge, slightly lighter at center */}
+          <radialGradient id="mpLeafGrad" cx="35%" cy="40%" r="65%">
+            <stop offset="0%"   stopColor="#6aac72" />
+            <stop offset="45%"  stopColor="#4d8a55" />
+            <stop offset="100%" stopColor="#2e5e36" />
+          </radialGradient>
 
-          {/* Vine gradient: bottom = deep, top = bright */}
+          {/* Vine — deep muted green */}
           <linearGradient id="mpVineGrad" x1="0%" y1="100%" x2="0%" y2="0%">
-            <stop offset="0%"   stopColor="#15803d" />
-            <stop offset="50%"  stopColor="#22c55e" />
-            <stop offset="100%" stopColor="#4ade80" />
+            <stop offset="0%"   stopColor="#2e5e36" />
+            <stop offset="60%"  stopColor="#3d7545" />
+            <stop offset="100%" stopColor="#4d8a55" />
           </linearGradient>
 
-          {/* Pole gradient */}
+          {/* Wooden pole */}
           <linearGradient id="mpPoleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%"   stopColor="#a0835a" />
-            <stop offset="45%"  stopColor="#d4aa70" />
+            <stop offset="0%"   stopColor="#8b6343" />
+            <stop offset="40%"  stopColor="#c8a06a" />
             <stop offset="100%" stopColor="#8b6343" />
           </linearGradient>
 
-          {/* Pot gradient */}
+          {/* Pot body */}
           <linearGradient id="mpPotGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%"   stopColor="#9e5330" />
-            <stop offset="40%"  stopColor="#c1693a" />
+            <stop offset="0%"   stopColor="#8b4513" />
+            <stop offset="40%"  stopColor="#b5572a" />
             <stop offset="100%" stopColor="#8b4513" />
           </linearGradient>
-
-          {/* Leaf sway animation */}
-          <style>{`
-            @keyframes mpLeafSway {
-              0%, 100% { transform-origin: 0 0; transform: rotate(0deg); }
-              40%       { transform-origin: 0 0; transform: rotate(4deg); }
-              70%       { transform-origin: 0 0; transform: rotate(-3deg); }
-            }
-            @keyframes mpLeafFadeIn {
-              from { opacity: 0; transform-origin: 0 0; transform: scale(0.4); }
-              to   { opacity: 1; transform-origin: 0 0; transform: scale(1); }
-            }
-            .mp-leaf {
-              opacity: 0;
-              animation: mpLeafFadeIn 0.55s ease-out forwards, mpLeafSway 4s ease-in-out infinite;
-            }
-          `}</style>
         </defs>
 
-        {/* ── Terracotta pot ── */}
+        {/* ── Small pot ── */}
         <g>
-          {/* Pot body */}
-          <path
-            d="M 12 860 L 8 900 L 72 900 L 68 860 Z"
-            fill="url(#mpPotGrad)"
-            stroke="#7a3a10"
-            strokeWidth="1"
-          />
-          {/* Pot highlight */}
-          <path
-            d="M 18 863 L 14 897 L 20 897 L 23 863 Z"
-            fill="rgba(255,255,255,0.11)"
-          />
-          {/* Pot rim */}
-          <rect x="8" y="847" width="64" height="16" rx="4"
-            fill="#cd7a46" stroke="#9e5330" strokeWidth="1"/>
+          {/* Pot body — narrower and shorter than before */}
+          <path d="M 24 850 L 20 880 L 60 880 L 56 850 Z"
+            fill="url(#mpPotGrad)" stroke="#6b3410" strokeWidth="1" />
+          {/* Highlight on pot */}
+          <path d="M 28 852 L 25 878 L 30 878 L 32 852 Z"
+            fill="rgba(255,255,255,0.1)" />
+          {/* Rim */}
+          <rect x="20" y="841" width="40" height="11" rx="3"
+            fill="#c06838" stroke="#8b4513" strokeWidth="0.8" />
           {/* Rim highlight */}
-          <rect x="10" y="848" width="60" height="5" rx="2"
-            fill="rgba(255,255,255,0.18)"/>
-          {/* Soil surface */}
-          <ellipse cx="40" cy="855" rx="29" ry="8" fill="#5c3317"/>
-          {/* Soil texture */}
-          <ellipse cx="30" cy="854" rx="6" ry="2.5" fill="#4a2810" opacity="0.55"/>
-          <ellipse cx="48" cy="856" rx="5" ry="2" fill="#4a2810" opacity="0.55"/>
-          <ellipse cx="39" cy="852" rx="4" ry="1.5" fill="#4a2810" opacity="0.4"/>
-          <circle cx="25" cy="857" r="1.5" fill="#3d2008" opacity="0.5"/>
-          <circle cx="53" cy="853" r="1.2" fill="#3d2008" opacity="0.5"/>
+          <rect x="22" y="842" width="36" height="3.5" rx="1.5"
+            fill="rgba(255,255,255,0.15)" />
+          {/* Soil */}
+          <ellipse cx="40" cy="849" rx="19" ry="5.5" fill="#4a2d10" />
+          <ellipse cx="34" cy="848" rx="4" ry="1.5" fill="#3a2008" opacity="0.6" />
+          <ellipse cx="46" cy="850" rx="3" ry="1.5" fill="#3a2008" opacity="0.5" />
         </g>
 
-        {/* ── Central pole/stake ── */}
-        <rect
-          x="38" y="30" width="4" height="820"
-          rx="2"
-          fill="url(#mpPoleGrad)"
-          stroke="#8b6343"
-          strokeWidth="0.5"
-        />
+        {/* ── Wooden pole ── */}
+        <rect x="38.5" y="28" width="3" height="820" rx="1.5"
+          fill="url(#mpPoleGrad)" stroke="#7a5232" strokeWidth="0.4" />
         {/* Pole sheen */}
-        <rect x="39" y="30" width="1.2" height="820" rx="0.6"
-          fill="rgba(255,255,255,0.2)"/>
+        <rect x="39.3" y="28" width="1" height="820" rx="0.5"
+          fill="rgba(255,255,255,0.18)" />
 
         {/* ── Vine ── */}
         <path
@@ -252,22 +179,20 @@ export default function MoneyPlant() {
           d={VINE_PATH}
           fill="none"
           stroke="url(#mpVineGrad)"
-          strokeWidth="3.5"
+          strokeWidth="2.8"
           strokeLinecap="round"
           strokeLinejoin="round"
         />
 
-        {/* ── Leaves ── */}
-        {LEAVES.map(([x, y, dir, angle, size, delay], i) => (
-          <Leaf key={i} x={x} y={y} direction={dir} angle={angle} size={size} delay={delay} />
+        {/* ── Leaves — rendered on top of vine, fully static (no opacity animation to avoid SVG transform issues) ── */}
+        {LEAVES.map(([x, y, dir, angle], i) => (
+          <Leaf key={i} x={x} y={y} direction={dir} angle={angle} />
         ))}
 
         {/* ── Tip bud ── */}
-        <g className="mp-leaf" style={{ animationDelay: '3.0s' }}>
-          <circle cx="38" cy="18" r="5" fill="#86efac" stroke="#22c55e" strokeWidth="0.8"/>
-          <circle cx="40" cy="12" r="3.5" fill="#4ade80" stroke="#22c55e" strokeWidth="0.6"/>
-          <circle cx="42" cy="7"  r="2.5" fill="#22c55e" stroke="#16a34a" strokeWidth="0.5"/>
-        </g>
+        <circle cx="40" cy="18" r="4"   fill="#4d8a55" stroke="#2e5e36" strokeWidth="0.6" />
+        <circle cx="40" cy="12" r="2.8" fill="#6aac72" stroke="#3d7545" strokeWidth="0.5" />
+        <circle cx="40" cy="7"  r="1.8" fill="#8ac48a" stroke="#4d8a55" strokeWidth="0.4" />
       </svg>
     </div>
   );
