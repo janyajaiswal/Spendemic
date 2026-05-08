@@ -47,6 +47,12 @@ try:
 except Exception:
     chronos_model = None  # type: ignore
 
+# LSTM fallback — pure numpy, always available.
+try:
+    import lstm_model  # noqa: E402
+except Exception:
+    lstm_model = None  # type: ignore
+
 router = APIRouter(prefix="/api/v1/forecast", tags=["forecast"])
 
 
@@ -128,13 +134,14 @@ def run_forecast(
     prediction_months: int = Query(default=3, ge=1, le=12),
     prediction_weeks: int = Query(default=8, ge=1, le=52),
     granularity: Literal["weekly", "monthly"] = Query(default="weekly"),
+    model: str = Query(default="auto", description="Forecasting model: 'auto', 'chronos', or 'lstm'"),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     """Run forecast using pre-saved ForecastContext rows. Default granularity is weekly."""
     if granularity == "weekly":
-        return _run_from_db_weekly(current_user.id, prediction_weeks, db)
-    return _run_from_db(current_user.id, prediction_months, db)
+        return _run_from_db_weekly(current_user.id, prediction_weeks, db, model=model)
+    return _run_from_db(current_user.id, prediction_months, db, model=model)
 
 
 @router.get("/to-graduation")
@@ -218,21 +225,42 @@ def _statistical_forecast(history: list[float], future_covariates: list[dict], n
     return predictions
 
 
-def _execute(history, monthly_labels, future_covariates, next_months, prediction_months, cold_start, graduation_date=None) -> dict:
+def _execute(history, monthly_labels, future_covariates, next_months, prediction_months,
+             cold_start, graduation_date=None, model: str = "auto") -> dict:
     warnings = []
+    chronos_available = chronos_model is not None and chronos_model._PIPELINE is not None
+    lstm_available    = lstm_model is not None
 
-    if chronos_model is not None and chronos_model._PIPELINE is not None:
+    use_chronos = model == "chronos" or (model == "auto" and chronos_available)
+    use_lstm    = model == "lstm"    or (model == "auto" and not chronos_available and lstm_available)
+
+    if use_chronos and chronos_available:
         ok, msg = chronos_model.has_enough_data(history)
         if not ok:
             raise HTTPException(status_code=422, detail=msg)
         try:
-            predictions = chronos_model.forecast(history=history, future_covariates=future_covariates, prediction_months=prediction_months)
+            predictions = chronos_model.forecast(
+                history=history, future_covariates=future_covariates,
+                prediction_months=prediction_months,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+        if msg:
+            warnings.append(msg)
+    elif use_lstm and lstm_available:
+        ok, msg = lstm_model.has_enough_data(history)
+        if not ok:
+            raise HTTPException(status_code=422, detail=msg)
+        try:
+            predictions = lstm_model.forecast(
+                history=history, future_covariates=future_covariates,
+                prediction_months=prediction_months,
+            )
         except Exception as exc:
             raise HTTPException(status_code=500, detail=str(exc))
         if msg:
             warnings.append(msg)
     else:
-        # Chronos-2 unavailable — use statistical fallback
         predictions = _statistical_forecast(history, future_covariates, prediction_months)
         warnings.append("Using statistical forecast (trend + smoothing). AI forecasting with Chronos-2 requires running the local backend.")
 
@@ -259,7 +287,7 @@ def _execute(history, monthly_labels, future_covariates, next_months, prediction
     }
 
 
-def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=None) -> dict:
+def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=None, model: str = "auto") -> dict:
     """Build all inputs from DB (history + ForecastContext covariates) then execute."""
     history, monthly_labels = _query_history(user_id, db)
     cold_start = False
@@ -288,9 +316,11 @@ def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=N
 
     # Auto-fetch exchange rate from API when user has different home + study currencies
     auto_exchange_rate: float | None = None
+    same_currency = True
     if user and user.home_currency and user.study_country_currency:
         home_cur = user.home_currency.value if hasattr(user.home_currency, "value") else str(user.home_currency)
         study_cur = user.study_country_currency.value if hasattr(user.study_country_currency, "value") else str(user.study_country_currency)
+        same_currency = home_cur.upper() == study_cur.upper()
         auto_exchange_rate = _fetch_exchange_rate_sync(home_cur, study_cur, db)
 
     # Tier 2: detect recurring values from transactions for missing covariate fields
@@ -303,7 +333,7 @@ def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=N
         .order_by(ForecastContext.year.desc(), ForecastContext.month.desc())
         .first()
     )
-    covariate_sources = _compute_covariate_sources(ctx_sample, detected_vals, auto_exchange_rate)
+    covariate_sources = _compute_covariate_sources(ctx_sample, detected_vals, auto_exchange_rate, same_currency=same_currency)
 
     future_covariates = []
     for f_yr, f_mo in next_months:
@@ -349,8 +379,15 @@ def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=N
                     "is_summer_break", "is_winter_break", "exchange_rate", "income_amount"]
         if any(c.get(k) for c in future_covariates)
     ]
+    chronos_available = chronos_model is not None and chronos_model._PIPELINE is not None
+    lstm_available    = lstm_model is not None
+    _model_used = (
+        "chronos-t5-small"  if (model in ("auto", "chronos") and chronos_available) else
+        "lstm"              if (model == "lstm" or (model == "auto" and lstm_available)) else
+        "statistical-fallback"
+    )
     model_info = {
-        "model_used": "chronos-t5-small" if (chronos_model and chronos_model._PIPELINE) else "statistical-fallback",
+        "model_used": _model_used,
         "history_points": len(monthly_labels),
         "covariates_active": covariates_active,
         "data_quality": data_quality,
@@ -358,7 +395,7 @@ def _run_from_db(user_id, prediction_months: int, db: Session, graduation_date=N
     ctx_has_tuition = any(cov.get("tuition_due", 0) > 0 for cov in future_covariates)
     tuition_prompt_needed = not ctx_has_tuition and not _tuition_seen_in_last_6_months(user_id, db)
 
-    result = _execute(history, monthly_labels, future_covariates, next_months, prediction_months, cold_start, graduation_date)
+    result = _execute(history, monthly_labels, future_covariates, next_months, prediction_months, cold_start, graduation_date, model=model)
     result["model_info"] = model_info
     result["covariate_sources"] = covariate_sources
     result["tuition_prompt_needed"] = tuition_prompt_needed
@@ -671,14 +708,15 @@ def _tuition_seen_in_last_6_months(user_id, db: Session) -> bool:
 
 def _detect_recurring_from_transactions(user_id, db: Session) -> dict:
     """
-    Scan last 90 days of EXPENSE transactions for recurring monthly patterns.
+    Scan last 180 days of EXPENSE transactions for recurring monthly patterns.
     Returns {field_name: (monthly_amount, "detected_from_transactions")}.
     Used as Tier 2 fallback when ForecastContext values are missing.
     """
-    RENT_CATS  = {"HOUSING", "RENT"}
-    FOOD_CATS  = {"FOOD", "GROCERIES", "DINING", "RESTAURANT", "FOOD_DELIVERY", "FOOD & DINING"}
-    UTIL_CATS  = {"UTILITIES", "BILLS", "PHONE", "INTERNET", "SUBSCRIPTIONS", "SUBSCRIPTION"}
-    cutoff = date.today() - timedelta(days=90)
+    RENT_CATS    = {"HOUSING", "RENT"}
+    FOOD_CATS    = {"FOOD", "GROCERIES", "DINING", "RESTAURANT", "FOOD_DELIVERY", "FOOD & DINING"}
+    UTIL_CATS    = {"UTILITIES", "BILLS", "PHONE", "INTERNET", "SUBSCRIPTIONS", "SUBSCRIPTION"}
+    TUITION_CATS = {"EDUCATION", "TUITION", "UNIVERSITY", "COLLEGE", "SCHOOL"}
+    cutoff = date.today() - timedelta(days=180)
 
     try:
         rows = db.query(
@@ -697,6 +735,7 @@ def _detect_recurring_from_transactions(user_id, db: Session) -> dict:
     month_rent: dict = defaultdict(float)
     month_food: dict = defaultdict(float)
     month_util: dict = defaultdict(float)
+    month_tuition: dict = defaultdict(float)
 
     for r in rows:
         cat = (r.category or "").upper().strip()
@@ -707,6 +746,8 @@ def _detect_recurring_from_transactions(user_id, db: Session) -> dict:
             month_food[key] += float(r.total)
         if cat in UTIL_CATS:
             month_util[key] += float(r.total)
+        if cat in TUITION_CATS:
+            month_tuition[key] += float(r.total)
 
     def _avg_recurring(d: dict) -> float | None:
         vals = list(d.values())
@@ -724,13 +765,17 @@ def _detect_recurring_from_transactions(user_id, db: Session) -> dict:
         result["food_estimate"] = (v, "detected_from_transactions")
     if (v := _avg_recurring(month_util)):
         result["utilities_estimate"] = (v, "detected_from_transactions")
+    # Tuition is per-semester (not monthly-recurring), so use the max single-month total
+    if month_tuition:
+        result["tuition_due"] = (round(max(month_tuition.values()), 2), "detected_from_transactions")
     return result
 
 
-def _compute_covariate_sources(ctx, detected: dict, auto_exchange_rate: float | None = None) -> dict:
+def _compute_covariate_sources(ctx, detected: dict, auto_exchange_rate: float | None = None, same_currency: bool = False) -> dict:
     """
     Build covariate_sources for the API response.
     Priority: ForecastContext (user_setup) > auto-fetched from API > detected_from_transactions > missing.
+    same_currency=True means home and study currencies are identical — exchange rate is N/A, not missing.
     """
     FIELDS = ["rent", "food_estimate", "utilities_estimate",
               "tuition_due", "scholarship_received", "exchange_rate", "hourly_rate"]
@@ -740,12 +785,16 @@ def _compute_covariate_sources(ctx, detected: dict, auto_exchange_rate: float | 
         ctx_valid = ctx_val > 0 and not (field == "exchange_rate" and ctx_val == 1.0)
         if ctx_valid:
             sources[field] = {"amount": ctx_val, "source": "user_setup"}
-        elif field == "exchange_rate" and auto_exchange_rate is not None:
-            sources[field] = {"amount": auto_exchange_rate, "source": "auto_fetched"}
+        elif field == "exchange_rate":
+            if same_currency:
+                sources[field] = {"amount": 1.0, "source": "not_applicable"}
+            elif auto_exchange_rate is not None:
+                sources[field] = {"amount": auto_exchange_rate, "source": "auto_fetched"}
+            else:
+                sources[field] = {"amount": 0.0, "source": "missing"}
         elif field in detected:
             sources[field] = {"amount": detected[field][0], "source": "detected_from_transactions"}
         elif field == "scholarship_received":
-            # Scholarship defaults to $0 silently — not everyone has one
             sources[field] = {"amount": 0.0, "source": "assumed_zero"}
         else:
             sources[field] = {"amount": 0.0, "source": "missing"}
@@ -814,7 +863,7 @@ def _query_history_weekly(user_id, db: Session, limit_weeks: int | None = None) 
     return history, labels
 
 
-def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
+def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session, model: str = "auto") -> dict:
     """Build weekly history + per-week covariates from DB, then run Chronos weekly forecast."""
     history, weekly_labels = _query_history_weekly(user_id, db)
     cold_start = False
@@ -840,9 +889,11 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
 
     # Auto-fetch exchange rate from API when user has home + study currencies set
     auto_exchange_rate: float | None = None
+    same_currency = True
     if user and user.home_currency and user.study_country_currency:
         home_cur = user.home_currency.value if hasattr(user.home_currency, "value") else str(user.home_currency)
         study_cur = user.study_country_currency.value if hasattr(user.study_country_currency, "value") else str(user.study_country_currency)
+        same_currency = home_cur.upper() == study_cur.upper()
         auto_exchange_rate = _fetch_exchange_rate_sync(home_cur, study_cur, db)
 
     # Tier 2 fallback: detect recurring values from recent transactions
@@ -855,7 +906,7 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
         .order_by(ForecastContext.year.desc(), ForecastContext.month.desc())
         .first()
     )
-    covariate_sources = _compute_covariate_sources(ctx_sample, detected_vals, auto_exchange_rate)
+    covariate_sources = _compute_covariate_sources(ctx_sample, detected_vals, auto_exchange_rate, same_currency=same_currency)
 
     # Recency-weighted base for factor computation (mirrors chronos_model.py)
     if history:
@@ -943,28 +994,72 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
                     "is_summer_break", "is_winter_break", "exchange_rate", "income_amount"]
         if any(c.get(k) for c in weekly_covariates)
     ]
+    chronos_available = chronos_model is not None and chronos_model._PIPELINE is not None
+    lstm_available    = lstm_model is not None
+    _model_used_wk = (
+        "chronos-t5-small"  if (model in ("auto", "chronos") and chronos_available) else
+        "lstm"              if (model == "lstm" or (model == "auto" and lstm_available)) else
+        "statistical-fallback"
+    )
     model_info = {
-        "model_used": "chronos-t5-small" if (chronos_model and chronos_model._PIPELINE) else "statistical-fallback",
+        "model_used": _model_used_wk,
         "history_points": len(weekly_labels),
         "covariates_active": covariates_active,
         "data_quality": data_quality,
     }
     missing = _compute_missing_fields(weekly_covariates, int(round(prediction_weeks / _WEEKS_PER_MONTH)))
 
-    # tuition_prompt_needed: true when tuition is not set in ForecastContext AND
-    # hasn't appeared in the last 6 months of transactions — user should confirm if enrolled
     ctx_has_tuition = any(cov.get("tuition_due", 0) > 0 for cov in weekly_covariates)
     tuition_prompt_needed = not ctx_has_tuition and not _tuition_seen_in_last_6_months(user_id, db)
 
-    if chronos_model is None:
-        predictions = _statistical_forecast(history, weekly_covariates, prediction_weeks)
+    use_chronos_wk = model in ("auto", "chronos") and chronos_available
+    use_lstm_wk    = model == "lstm" or (model == "auto" and not chronos_available and lstm_available)
+
+    def _attach_weekly_meta(predictions):
         for pred, (iso_yr, iso_wk) in zip(predictions, next_weeks):
             pred["year"] = iso_yr
             pred["week"] = iso_wk
         for pred, cov in zip(predictions, weekly_covariates):
             pred["factors"] = _build_factors_weekly(cov, history_base_weekly, bool(cov.get("_is_post_grad")))
             monthly_inc = float(cov.get("income_amount", 0))
-            pred["projected_income"] = round(monthly_inc / (52 / 12), 2) if monthly_inc > 0 else 0.0
+            pred["projected_income"] = round(monthly_inc / _WEEKS_PER_MONTH, 2) if monthly_inc > 0 else 0.0
+
+    if use_lstm_wk and lstm_available and not use_chronos_wk:
+        ok, msg = lstm_model.has_enough_data(history)
+        if not ok:
+            raise HTTPException(status_code=422, detail=msg)
+        try:
+            predictions = lstm_model.forecast_weekly(
+                history=history,
+                weekly_covariates=weekly_covariates,
+                prediction_weeks=prediction_weeks,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=str(exc))
+        _attach_weekly_meta(predictions)
+        warnings_wk = [msg] if msg else []
+        if cold_start:
+            warnings_wk.append("No transaction history yet — forecast anchored on your Forecast Setup data.")
+        return {
+            "history": [
+                {"year": y, "week": w, "total": round(t, 2), "synthetic": cold_start and i == len(weekly_labels) - 1}
+                for i, ((y, w), t) in enumerate(zip(weekly_labels, history))
+            ],
+            "predictions": predictions,
+            "prediction_weeks": prediction_weeks,
+            "granularity": "weekly",
+            "graduation_date": None,
+            "warnings": warnings_wk,
+            "missing_fields": missing,
+            "tuition_prompt_needed": tuition_prompt_needed,
+            "model_info": model_info,
+            "covariate_sources": covariate_sources,
+        }
+
+    if not use_chronos_wk:
+        # statistical fallback (last resort)
+        predictions = _statistical_forecast(history, weekly_covariates, prediction_weeks)
+        _attach_weekly_meta(predictions)
         return {
             "history": [
                 {"year": y, "week": w, "total": round(t, 2), "synthetic": cold_start and i == len(weekly_labels) - 1}
@@ -995,15 +1090,7 @@ def _run_from_db_weekly(user_id, prediction_weeks: int, db: Session) -> dict:
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
-    for pred, (iso_yr, iso_wk) in zip(predictions, next_weeks):
-        pred["year"] = iso_yr
-        pred["week"] = iso_wk
-    for pred, cov in zip(predictions, weekly_covariates):
-        pred["factors"] = _build_factors_weekly(cov, history_base_weekly, bool(cov.get("_is_post_grad")))
-        # Weekly income = monthly income ÷ 4.333
-        monthly_inc = float(cov.get("income_amount", 0))
-        pred["projected_income"] = round(monthly_inc / (52 / 12), 2) if monthly_inc > 0 else 0.0
-
+    _attach_weekly_meta(predictions)
     warnings = []
     if msg:
         warnings.append(msg)

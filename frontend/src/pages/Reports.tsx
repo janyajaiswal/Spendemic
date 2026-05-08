@@ -41,7 +41,7 @@ interface PredictionFactors {
 }
 interface Prediction    { year: number; month?: number; week?: number; month_offset?: number; week_offset?: number; lower: number; median: number; upper: number; factors?: PredictionFactors; projected_income?: number }
 interface ModelInfo     { model_used: string; history_points: number; covariates_active: string[]; data_quality: 'good' | 'limited' | 'sparse' }
-interface CovariateSource { amount: number; source: 'user_setup' | 'detected_from_transactions' | 'auto_fetched' | 'missing' | 'assumed_zero' }
+interface CovariateSource { amount: number; source: 'user_setup' | 'detected_from_transactions' | 'auto_fetched' | 'missing' | 'assumed_zero' | 'not_applicable' }
 interface ForecastResp  {
   history: HistoryPoint[]; predictions: Prediction[]; prediction_months?: number; prediction_weeks?: number;
   granularity: string; graduation_date: string | null; warnings: string[];
@@ -136,6 +136,7 @@ export default function Reports() {
   const [granularity, setGranularity]       = useState<'weekly' | 'monthly'>('weekly');
   const [predMonths, setPredMonths]         = useState(3);
   const [predWeeks, setPredWeeks]           = useState(8);
+  const [forecastModel, setForecastModel]   = useState<'auto' | 'lstm'>('auto');
   const [loading, setLoading]               = useState(false);
   const [error, setError]                   = useState<string | null>(null);
   const [loanProjection, setLoanProjection] = useState<LoanProjection | null>(null);
@@ -148,9 +149,10 @@ export default function Reports() {
     setError(null);
     try {
       const forecastBase = await getForecastAPI();
+      const modelParam = `&model=${forecastModel}`;
       const url = granularity === 'weekly'
-        ? `${forecastBase}/forecast?granularity=weekly&prediction_weeks=${predWeeks}`
-        : `${forecastBase}/forecast?granularity=monthly&prediction_months=${predMonths}`;
+        ? `${forecastBase}/forecast?granularity=weekly&prediction_weeks=${predWeeks}${modelParam}`
+        : `${forecastBase}/forecast?granularity=monthly&prediction_months=${predMonths}${modelParam}`;
       const res = await fetch(url, { headers: forecastHeaders });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -163,7 +165,7 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  }, [user?.accessToken, granularity, predMonths, predWeeks]);
+  }, [user?.accessToken, granularity, predMonths, predWeeks, forecastModel]);
 
   const fetchGradForecast = useCallback(async () => {
     try {
@@ -191,7 +193,7 @@ export default function Reports() {
         .then(d => { if (d && d.months_remaining > 0) setLoanProjection(d); })
         .catch(() => {});
     }
-  }, [granularity, predMonths, predWeeks, fetchForecast, fetchGradForecast, fetchWeeklySummary]);
+  }, [granularity, predMonths, predWeeks, forecastModel, fetchForecast, fetchGradForecast, fetchWeeklySummary]);
 
   // ── Rolling average (4-period window over history) ──
   const rollingAvgData: number[] = forecast?.history.map((_, i, arr) => {
@@ -250,17 +252,38 @@ export default function Reports() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28, flexWrap: 'wrap' }}>
         <TrendingUp size={24} color="var(--accent)" />
         <div style={{ flex: 1 }}>
-          <h2 style={{ color: 'var(--text-primary)', margin: 0, fontSize: '1.5em', fontWeight: 700, letterSpacing: '-0.3px' }}>Spending Reports & Forecast</h2>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.8em', margin: 0, opacity: 0.65 }}>
-            Powered by Amazon Chronos-2 · historical actuals + probabilistic predictions
-            <InfoTooltip
-              text="Chronos-2 is a time-series AI model by Amazon that learns from your past spending to predict future expenses. It accounts for factors like rent, food, tuition, scholarship, and academic calendar events."
-              position="bottom"
-              maxWidth={340}
-            />
-          </p>
+          <div>
+            <h2 style={{ color: 'var(--text-primary)', margin: 0, fontSize: '1.5em', fontWeight: 700, letterSpacing: '-0.3px' }}>Spending Reports & Forecast</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8em', margin: '2px 0 0', opacity: 0.65, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {forecast?.model_info?.model_used === 'lstm'
+                ? 'Powered by LSTM Neural Network · learned from your spending history'
+                : 'Powered by Amazon Chronos-2 · historical actuals + probabilistic predictions'}
+              <InfoTooltip
+                text={forecast?.model_info?.model_used === 'lstm'
+                  ? 'LSTM (Long Short-Term Memory) is a neural network that trains directly on your spending history. It learns temporal patterns — trends, cycles, and covariate effects — without requiring a large pre-trained model. Runs entirely on the server.'
+                  : 'Chronos-2 is a time-series AI model by Amazon that learns from your past spending to predict future expenses. It accounts for factors like rent, food, tuition, scholarship, and academic calendar events.'}
+                position="bottom"
+                maxWidth={340}
+              />
+            </p>
+          </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          {/* Model selector */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0, border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            {([['auto', 'Chronos AI'], ['lstm', 'LSTM']] as const).map(([m, label]) => (
+              <button key={m} onClick={() => setForecastModel(m)} style={{
+                padding: '7px 13px', fontSize: '0.78em', fontFamily: 'inherit', cursor: 'pointer',
+                background: forecastModel === m ? 'var(--accent)' : 'transparent',
+                color:      forecastModel === m ? 'var(--teal-900)' : 'var(--text-secondary)',
+                border: 'none', fontWeight: forecastModel === m ? 700 : 500,
+                borderRight: m === 'auto' ? '1px solid var(--border)' : 'none',
+              }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          {/* Granularity selector */}
           {(['weekly', 'monthly'] as const).map(g => (
             <button key={g} onClick={() => setGranularity(g)} style={{
               padding: '7px 14px', fontSize: '0.83em', borderRadius: 8, fontFamily: 'inherit',
@@ -602,7 +625,7 @@ export default function Reports() {
               <div style={{ color: 'var(--text-secondary)', fontSize: '0.7em', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 10, opacity: 0.6, display: 'flex', alignItems: 'center' }}>
                 Where your data comes from
                 <InfoTooltip
-                  text={'The model uses these values to build your forecast:\n• Forecast Setup ✓ — you entered this manually\n• auto-detected ✓ — pulled from your recurring transactions\n• live rate ✓ — fetched from a currency exchange API\n• missing — not set, reducing forecast accuracy'}
+                  text={'The model uses these values to build your forecast:\n• Forecast Setup ✓ — you entered this manually\n• auto-detected ✓ — pulled from your transaction history\n• live rate ✓ — fetched from a currency exchange API\n• N/A — same currency — both currencies are USD; no conversion needed\n• missing — not set, reducing forecast accuracy'}
                   position="left"
                   maxWidth={340}
                 />
@@ -619,17 +642,19 @@ export default function Reports() {
                       : info.source === 'detected_from_transactions' ? '#f59e0b'
                       : info.source === 'auto_fetched' ? '#2dd4bf'
                       : info.source === 'assumed_zero' ? '#2dd4bf'
+                      : info.source === 'not_applicable' ? '#6b7280'
                       : '#f87171';
                     const srcText = info.source === 'user_setup' ? 'Forecast Setup ✓'
                       : info.source === 'detected_from_transactions' ? 'auto-detected ✓'
                       : info.source === 'auto_fetched' ? 'live rate ✓'
                       : info.source === 'assumed_zero' ? '$0 assumed'
+                      : info.source === 'not_applicable' ? 'N/A — same currency'
                       : 'missing';
                     return (
                       <div key={field} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 0', borderBottom: '1px solid var(--border)' }}>
                         <span style={{ color: 'var(--text-secondary)' }}>{labels[field] ?? field}</span>
                         <div style={{ textAlign: 'right' }}>
-                          {info.amount > 0 && <span style={{ color: 'var(--text-primary)', fontWeight: 600, marginRight: 6 }}>{usd(info.amount)}/mo</span>}
+                          {info.amount > 0 && info.source !== 'not_applicable' && <span style={{ color: 'var(--text-primary)', fontWeight: 600, marginRight: 6 }}>{usd(info.amount)}/mo</span>}
                           <span style={{ fontSize: '0.78em', color: srcColor, background: `${srcColor}18`, borderRadius: 99, padding: '1px 7px' }}>{srcText}</span>
                         </div>
                       </div>

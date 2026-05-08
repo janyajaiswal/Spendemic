@@ -148,6 +148,33 @@ interface RecentTx {
   id: string; amount: string; currency: string; type: string;
   category: string; description: string; transaction_date: string;
 }
+interface ActiveJob {
+  id: string; job_name: string; employer?: string;
+  hourly_rate: number; hours_per_week: number; job_type?: string;
+}
+interface Shift { hours: number; date: string; }
+
+function getWeekKey(d: Date): string {
+  const dt = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const day = dt.getUTCDay() || 7;
+  dt.setUTCDate(dt.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(dt.getUTCFullYear(), 0, 1));
+  const wk = Math.ceil(((dt.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${dt.getUTCFullYear()}-W${String(wk).padStart(2, '0')}`;
+}
+function getWeekRange(d: Date): string {
+  const day = d.getDay();
+  const mon = new Date(d); mon.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  const fmt = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return `${fmt(mon)} – ${fmt(sun)}`;
+}
+function loadShifts(): Record<string, Record<string, Shift[]>> {
+  try { return JSON.parse(localStorage.getItem('spendemic_shifts') ?? '{}'); } catch { return {}; }
+}
+function saveShifts(data: Record<string, Record<string, Shift[]>>) {
+  localStorage.setItem('spendemic_shifts', JSON.stringify(data));
+}
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -165,11 +192,16 @@ export default function Dashboard() {
   const [recentTxs, setRecentTxs] = useState<RecentTx[]>([]);
   const [university, setUniversity] = useState('');
 
-  // Work-hours tracker state (visa tab) — persisted to localStorage
-  const [hoursWorked, setHoursWorked] = useState(() => localStorage.getItem('visa_hours') ?? '');
+  // Visa & Work tracker state
   const [visaType, setVisaType] = useState(() => localStorage.getItem('visa_type') ?? 'F-1 (Academic)');
-  const hoursCap = visaType === 'F-1 (Academic)' ? 20 : visaType === 'J-1 (Exchange Visitor)' ? 20 : 20;
-  const [jobsTotalIncome, setJobsTotalIncome] = useState<number | null>(null);
+  const hoursCap = 20;
+  const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([]);
+  const [selectedJobId, setSelectedJobId] = useState('');
+  const [shiftHours, setShiftHours] = useState('');
+  const [allShifts, setAllShifts] = useState<Record<string, Record<string, Shift[]>>>(loadShifts);
+  const today = new Date();
+  const weekKey = getWeekKey(today);
+  const weekShifts = allShifts[weekKey] ?? {};  // { jobId: Shift[] }
 
   // Sync tab when chatbot navigates to /dashboard?tab=...
   useEffect(() => {
@@ -177,16 +209,18 @@ export default function Dashboard() {
     if (t && ['overview', 'health', 'visa', 'resources'].includes(t)) setActiveTab(t);
   }, [searchParams]);
 
-  useEffect(() => { localStorage.setItem('visa_hours', hoursWorked); }, [hoursWorked]);
   useEffect(() => { localStorage.setItem('visa_type', visaType); }, [visaType]);
 
   useEffect(() => {
     if (activeTab !== 'visa') return;
     const token = user?.accessToken ?? localStorage.getItem('spendemic_token') ?? '';
     if (!token) return;
-    fetch(`${API}/jobs/total-income`, { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d) setJobsTotalIncome(d.total_monthly_income ?? 0); })
+    fetch(`${API}/jobs`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : [])
+      .then((jobs: ActiveJob[]) => {
+        setActiveJobs(jobs);
+        if (jobs.length > 0 && !selectedJobId) setSelectedJobId(jobs[0].id);
+      })
       .catch(() => {});
   }, [activeTab, user]);
 
@@ -269,6 +303,33 @@ export default function Dashboard() {
       }
     })();
   }, [activeTab, user]);
+
+  const addShift = () => {
+    const hrs = parseFloat(shiftHours);
+    if (!selectedJobId || isNaN(hrs) || hrs <= 0) return;
+    const todayStr = today.toISOString().split('T')[0];
+    const newShift: Shift = { hours: hrs, date: todayStr };
+    const updated = { ...allShifts };
+    if (!updated[weekKey]) updated[weekKey] = {};
+    if (!updated[weekKey][selectedJobId]) updated[weekKey][selectedJobId] = [];
+    updated[weekKey][selectedJobId] = [...updated[weekKey][selectedJobId], newShift];
+    setAllShifts(updated);
+    saveShifts(updated);
+    setShiftHours('');
+  };
+
+  const removeShift = (jobId: string, idx: number) => {
+    const updated = { ...allShifts };
+    updated[weekKey][jobId] = updated[weekKey][jobId].filter((_, i) => i !== idx);
+    setAllShifts(updated);
+    saveShifts(updated);
+  };
+
+  const totalWeekHours = Object.values(weekShifts).flat().reduce((s, sh) => s + sh.hours, 0);
+  const weekEarnings = activeJobs.reduce((sum, job) => {
+    const jobHrs = (weekShifts[job.id] ?? []).reduce((s, sh) => s + sh.hours, 0);
+    return sum + jobHrs * Number(job.hourly_rate);
+  }, 0);
 
   const q = search.toLowerCase();
 
@@ -558,60 +619,160 @@ export default function Dashboard() {
       {/* ── TAB: VISA & WORK ── */}
       {activeTab === 'visa' && (
         <div>
-          {/* Work hours tracker */}
-          <h3 style={{ ...s.sectionTitle, display: 'flex', alignItems: 'center' }}>
-            Weekly work-hours tracker
-            <InfoTooltip
-              text={'F-1 students: max 20 hrs/week on-campus during the semester. During breaks (summer/winter), you may work full-time (40 hrs). CPT/OPT students: full-time allowed.\n\nThis tracker is a quick check — it does not save data. For compliance records, keep your own log.'}
-              position="right"
-              maxWidth={340}
-            />
-          </h3>
-          <div style={s.visaTracker}>
+          {/* ── Visa selector + compliance bar ── */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+            <div>
+              <h3 style={{ ...s.sectionTitle, margin: '0 0 4px' }}>
+                Weekly work-hours tracker
+                <InfoTooltip
+                  text={'F-1/J-1 students: max 20 hrs/week on-campus during the semester. Full-time allowed during official school breaks.\n\nHours are saved per job, per week in your browser. They reset each new week automatically.'}
+                  position="right"
+                  maxWidth={340}
+                />
+              </h3>
+              <p style={{ margin: 0, fontSize: '0.8em', color: 'var(--text-secondary)', opacity: 0.55 }}>
+                Week of {getWeekRange(today)}
+              </p>
+            </div>
             <div style={s.formGroup}>
-              <label style={s.label}>Your visa type</label>
-              <select style={s.input} value={visaType} onChange={e => setVisaType(e.target.value)}>
+              <label style={s.label}>Visa type</label>
+              <select style={{ ...s.input, minWidth: 180 }} value={visaType} onChange={e => setVisaType(e.target.value)}>
                 {VISA_RULES.map(v => <option key={v.visa}>{v.visa}</option>)}
               </select>
             </div>
-            <div style={s.formGroup}>
-              <label style={s.label}>Hours worked this week</label>
-              <input style={s.input} type="number" min="0" max="168" step="0.5"
-                placeholder="0" value={hoursWorked}
-                onChange={e => setHoursWorked(e.target.value)} />
-            </div>
-            {hoursWorked !== '' && (
-              <div style={s.hoursResult}>
-                <div style={s.hoursBarTrack}>
-                  <div style={{
-                    ...s.hoursBarFill,
-                    width: `${Math.min(Number(hoursWorked) / hoursCap, 1) * 100}%`,
-                    background: Number(hoursWorked) > hoursCap ? '#f87171'
-                      : Number(hoursWorked) >= hoursCap * 0.8 ? '#fbbf24' : '#4ade80',
-                  }} />
-                </div>
-                <p style={{ color: Number(hoursWorked) > hoursCap ? '#f87171' : '#4ade80', fontWeight: 600 }}>
-                  {Number(hoursWorked) > hoursCap
-                    ? `${(Number(hoursWorked) - hoursCap).toFixed(1)} hrs over the ${hoursCap}-hr limit`
-                    : `${(hoursCap - Number(hoursWorked)).toFixed(1)} hrs remaining this week`}
-                </p>
-              </div>
-            )}
           </div>
 
-          {/* Jobs total income */}
-          {jobsTotalIncome !== null && (
-            <div style={{ background: 'rgba(45,212,191,0.06)', border: '1px solid rgba(45,212,191,0.2)', borderRadius: '12px', padding: '16px 20px', marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <p style={{ margin: 0, fontSize: '0.72em', color: 'var(--text-secondary)', opacity: 0.6, textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Total Monthly Income (all active jobs)</p>
-                <p style={{ margin: '4px 0 0', fontSize: '1.4em', fontWeight: 700, color: '#2dd4bf' }}>
-                  ${jobsTotalIncome.toFixed(2)}/mo
-                </p>
-              </div>
-              <Link to="/settings" style={{ fontSize: '0.875em', color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}>
-                Manage jobs →
-              </Link>
+          {/* Compliance bar */}
+          <div className="dash-card" style={{ padding: '18px 20px', borderRadius: 12, marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 10 }}>
+              <span style={{ fontWeight: 700, fontSize: '1.05em', color: totalWeekHours > hoursCap ? '#f87171' : 'var(--text-primary)' }}>
+                {totalWeekHours.toFixed(1)} / {hoursCap} hrs this week
+              </span>
+              {weekEarnings > 0 && (
+                <span style={{ fontSize: '0.83em', color: '#2dd4bf', fontWeight: 600 }}>
+                  ~${weekEarnings.toFixed(2)} earned
+                </span>
+              )}
             </div>
+            <div style={s.hoursBarTrack}>
+              <div style={{
+                ...s.hoursBarFill,
+                width: `${Math.min(totalWeekHours / hoursCap, 1) * 100}%`,
+                background: totalWeekHours > hoursCap ? '#f87171' : totalWeekHours >= hoursCap * 0.8 ? '#fbbf24' : '#2dd4bf',
+              }} />
+            </div>
+            <p style={{ margin: '8px 0 0', fontSize: '0.8em', fontWeight: 600, color: totalWeekHours > hoursCap ? '#f87171' : '#2dd4bf' }}>
+              {totalWeekHours > hoursCap
+                ? `${(totalWeekHours - hoursCap).toFixed(1)} hrs over the ${hoursCap}-hr limit — check compliance`
+                : `${(hoursCap - totalWeekHours).toFixed(1)} hrs remaining`}
+            </p>
+          </div>
+
+          {/* ── Log a shift ── */}
+          <h3 style={s.sectionTitle}>Log a shift</h3>
+          {activeJobs.length === 0 ? (
+            <div className="dash-card" style={{ padding: '20px', borderRadius: 12, marginBottom: 20, textAlign: 'center' }}>
+              <p style={{ margin: '0 0 12px', color: 'var(--text-secondary)', opacity: 0.65, fontSize: '0.875em' }}>
+                No jobs found. Add your jobs in Settings first.
+              </p>
+              <Link to="/settings" style={s.seeAll}>Go to Settings → Jobs</Link>
+            </div>
+          ) : (
+            <div className="dash-card" style={{ padding: '18px 20px', borderRadius: 12, marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10, alignItems: 'end' }}>
+                <div style={s.formGroup}>
+                  <label style={s.label}>Job</label>
+                  <select style={s.input} value={selectedJobId} onChange={e => setSelectedJobId(e.target.value)}>
+                    {activeJobs.map(j => (
+                      <option key={j.id} value={j.id}>
+                        {j.job_name}{j.employer ? ` — ${j.employer}` : ''} (${Number(j.hourly_rate).toFixed(2)}/hr)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div style={s.formGroup}>
+                  <label style={s.label}>Hours</label>
+                  <input
+                    style={{ ...s.input, width: 90 }}
+                    type="number" min="0.5" max="24" step="0.5"
+                    placeholder="e.g. 3.5"
+                    value={shiftHours}
+                    onChange={e => setShiftHours(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addShift()}
+                  />
+                </div>
+                <button
+                  onClick={addShift}
+                  disabled={!shiftHours || parseFloat(shiftHours) <= 0}
+                  style={{
+                    padding: '10px 18px', background: '#2dd4bf', border: 'none', borderRadius: 8,
+                    color: '#071e1c', fontWeight: 700, fontSize: '0.875em', cursor: 'pointer',
+                    opacity: (!shiftHours || parseFloat(shiftHours) <= 0) ? 0.4 : 1,
+                    alignSelf: 'end', height: 40,
+                  }}
+                >
+                  + Log shift
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Per-job shift breakdown ── */}
+          {activeJobs.length > 0 && (
+            <>
+              <h3 style={s.sectionTitle}>This week's shifts by job</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 28 }}>
+                {activeJobs.map(job => {
+                  const jobShifts = weekShifts[job.id] ?? [];
+                  const jobHrs = jobShifts.reduce((s, sh) => s + sh.hours, 0);
+                  const jobEarnings = jobHrs * Number(job.hourly_rate);
+                  return (
+                    <div key={job.id} className="dash-card" style={{ borderRadius: 12, overflow: 'hidden' }}>
+                      {/* Job header */}
+                      <div style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: jobShifts.length > 0 ? '1px solid var(--border)' : 'none' }}>
+                        <div>
+                          <span style={{ fontWeight: 600, fontSize: '0.9em', color: 'var(--text-primary)' }}>{job.job_name}</span>
+                          {job.employer && <span style={{ fontSize: '0.75em', color: 'var(--text-secondary)', opacity: 0.55, marginLeft: 8 }}>{job.employer}</span>}
+                          <span style={{ fontSize: '0.72em', color: 'var(--text-secondary)', opacity: 0.45, marginLeft: 8 }}>${Number(job.hourly_rate).toFixed(2)}/hr</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <span style={{ fontWeight: 700, color: jobHrs > 0 ? '#2dd4bf' : 'var(--text-secondary)', fontSize: '0.9em' }}>
+                            {jobHrs.toFixed(1)} hrs
+                          </span>
+                          {jobEarnings > 0 && (
+                            <span style={{ fontSize: '0.75em', color: 'var(--text-secondary)', opacity: 0.6, marginLeft: 8 }}>
+                              ${jobEarnings.toFixed(2)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {/* Shift list */}
+                      {jobShifts.length === 0 ? (
+                        <div style={{ padding: '10px 16px', fontSize: '0.78em', color: 'var(--text-secondary)', opacity: 0.4 }}>
+                          No shifts logged yet this week
+                        </div>
+                      ) : (
+                        jobShifts.map((sh, idx) => (
+                          <div key={idx} style={{ padding: '8px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: idx < jobShifts.length - 1 ? '1px solid var(--border)' : 'none', fontSize: '0.83em' }}>
+                            <span style={{ color: 'var(--text-secondary)', opacity: 0.7 }}>
+                              {new Date(sh.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{sh.hours.toFixed(1)} hrs</span>
+                              <button
+                                onClick={() => removeShift(job.id, idx)}
+                                style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '0.85em', opacity: 0.6, padding: '2px 4px' }}
+                                title="Remove shift"
+                              >✕</button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
 
           {/* Visa rules */}
