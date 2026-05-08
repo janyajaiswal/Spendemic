@@ -392,7 +392,7 @@ export default function Reports() {
                 Add at least 2 weeks of transactions to unlock AI forecasting
               </div>
               <div style={{ color: 'var(--text-secondary)', fontSize: '0.83em', marginBottom: 16, opacity: 0.65 }}>
-                Chronos-2 needs enough history to detect spending patterns. Keep logging transactions!
+                The AI model needs enough history to detect spending patterns. Keep logging transactions!
               </div>
               <div style={{ background: 'rgba(255,227,180,0.08)', borderRadius: 99, height: 6, overflow: 'hidden', maxWidth: 320, margin: '0 auto 8px' }}>
                 <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent)', borderRadius: 99, transition: 'width 0.4s ease' }} />
@@ -891,7 +891,7 @@ export default function Reports() {
               <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.95em', display: 'flex', alignItems: 'center' }}>
                 Graduation Forecast
                 <InfoTooltip
-                  text="This projects your total spending from now until your graduation date. It uses the same Chronos-2 model with your academic calendar (breaks, tuition cycles, health insurance) factored in. After graduation, university costs are automatically removed."
+                  text="This projects your total spending from now until your graduation date. It uses the same forecasting model with your academic calendar (breaks, tuition cycles, health insurance) factored in. After graduation, university costs are automatically removed."
                   position="right"
                   maxWidth={340}
                 />
