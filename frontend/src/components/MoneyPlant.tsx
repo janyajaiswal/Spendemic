@@ -18,19 +18,20 @@ const VINE_PATH = [
   'Q 44 32  40 18',    // tip
 ].join(' ');
 
-// Leaves spaced evenly at each arc peak — varied tilts for natural look
-// [x, y, 'left'|'right', tilt-angle]
+// Leaves spaced evenly at each arc peak — mostly vertical with natural variation
+// angle drives rotate(-angle) for right leaves, rotate(angle) for left leaves
+// ~90 = pointing straight up; varied ±15° for organic feel
 const LEAVES: [number, number, 'left' | 'right', number][] = [
-  [27, 775, 'left',  -22],
-  [53, 705, 'right',   7],
-  [27, 635, 'left',   -5],
-  [53, 565, 'right',  24],
-  [27, 495, 'left',  -17],
-  [53, 425, 'right',   4],
-  [27, 355, 'left',  -28],
-  [53, 285, 'right',  13],
-  [27, 215, 'left',   -9],
-  [53, 145, 'right',  19],
+  [27, 775, 'left',  -82],
+  [53, 705, 'right',  88],
+  [27, 635, 'left',  -92],
+  [53, 565, 'right',  76],
+  [27, 495, 'left',  -78],
+  [53, 425, 'right',  95],
+  [27, 355, 'left',  -88],
+  [53, 285, 'right',  80],
+  [27, 215, 'left',  -84],
+  [53, 145, 'right',  90],
 ];
 
 function Leaf({ x, y, direction, angle }: { x: number; y: number; direction: 'left' | 'right'; angle: number }) {
