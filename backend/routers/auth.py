@@ -6,8 +6,11 @@ from __future__ import annotations
 import os
 import uuid
 import secrets
+import smtplib
 import threading
 from datetime import datetime, timezone, timedelta
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 from typing import Any
 
 import httpx
@@ -66,8 +69,17 @@ ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 OTP_EXPIRE_MINUTES: int = 5
 
-RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER: str = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "Spendemic")
 DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
+
+_SMTP_PLACEHOLDER = {"", "your-gmail@gmail.com", "your-app-password"}
+
+def _smtp_configured() -> bool:
+    return SMTP_USER not in _SMTP_PLACEHOLDER and SMTP_PASSWORD not in _SMTP_PLACEHOLDER
 
 GOOGLE_TOKENINFO_URL: str = "https://oauth2.googleapis.com/tokeninfo"
 
@@ -114,12 +126,12 @@ def _record_session(db: Session, user_id: Any, jti: str, issued_at: datetime,
 
 
 def _send_otp_email(to_email: str, name: str, code: str) -> None:
-    """Send OTP verification email via Resend API. Falls back to terminal log in DEBUG mode."""
-    if not RESEND_API_KEY:
+    """Send OTP verification email via SMTP. Falls back to terminal log in DEBUG mode."""
+    if not _smtp_configured():
         if DEBUG:
             print(f"\n{'='*50}\n[DEV] OTP for {to_email}: {code}\n{'='*50}\n", flush=True)
             return
-        raise RuntimeError("RESEND_API_KEY not configured")
+        raise RuntimeError("SMTP credentials not configured")
 
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;">
@@ -144,19 +156,26 @@ def _send_otp_email(to_email: str, name: str, code: str) -> None:
     </div>
     """
 
-    response = httpx.post(
-        "https://api.resend.com/emails",
-        headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
-        json={
-            "from": "Spendemic <onboarding@resend.dev>",
-            "to": [to_email],
-            "subject": f"{code} — Your Spendemic verification code",
-            "html": html,
-        },
-        timeout=15,
-    )
-    if response.status_code >= 400:
-        raise RuntimeError(f"Email send failed: {response.text}")
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"{code} — Your Spendemic verification code"
+    msg["From"] = f"{SMTP_FROM_NAME} <{SMTP_USER}>"
+    msg["To"] = to_email
+    msg.attach(MIMEText(html, "html"))
+
+    try:
+        if SMTP_PORT == 465:
+            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_USER, to_email, msg.as_string())
+        else:
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+                server.starttls()
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                server.sendmail(SMTP_USER, to_email, msg.as_string())
+    except smtplib.SMTPAuthenticationError:
+        raise RuntimeError("Gmail authentication failed — check App Password")
+    except Exception as e:
+        raise RuntimeError(f"Email send failed: {e}")
 
 
 async def _verify_google_token(credential: str) -> dict[str, Any]:
