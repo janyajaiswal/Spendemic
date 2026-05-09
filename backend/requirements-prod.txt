@@ -16,3 +16,4 @@ pandas
 anthropic
 openai
 better-profanity
+boto3

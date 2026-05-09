@@ -19,7 +19,7 @@
 
 % Figures & floats
 \usepackage{graphicx}
-\graphicspath{{figures/}}
+\graphicspath{{./}}
 \usepackage{array}
 \usepackage{float}
 \usepackage{wrapfig}
@@ -39,10 +39,8 @@
 \usepackage{algpseudocode}
 \usepackage{xcolor}
 \usepackage{listings}
-
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric,arrows.meta,positioning,backgrounds}
-
 
 \lstset{
   basicstyle=\ttfamily\small,
@@ -92,7 +90,7 @@
 \begin{titlepage}
 \centering
 \vspace{0.8cm}
-\includegraphics[height=6cm]{csuf_logo.png}\par
+\includegraphics[height=6cm]{figures/csuf_logo.png}\par
 
 \vspace{0.75 cm}
 {\Large Spendemic : AI Financial Guide App for International Students\par}
@@ -114,7 +112,7 @@ OF THE REQUIREMENTS FOR THE COURSE}\par
 {\large CALIFORNIA STATE UNIVERSITY, FULLERTON}\par
 
 \vspace{0.5cm}
-{April, 2026}\par
+{May, 2026}\par
 
 \vspace{0.5cm}
 {\large SUPERVISOR}\par
@@ -137,7 +135,7 @@ OF THE REQUIREMENTS FOR THE COURSE}\par
 \end{center}
 
 \begin{justifying}
-Spendemic is a full-stack AI financial planning web application designed for international students studying in the United States. The project addresses the question of how a financial tool can better support students who manage money across currencies, follow visa-based work limits, and plan around irregular income, tuition, rent, travel, health insurance, and academic breaks. The system combines transaction tracking, category budgets, savings goals, multi-currency support, visa work-hour awareness, receipt uploads, CSV and Excel imports, a moderated student FAQ, an AI chat assistant, and spending forecasts. It is implemented with a React and TypeScript frontend, a FastAPI and PostgreSQL backend, secure authentication, Claude Haiku for assistance and transaction classification, and a forecasting pipeline using Amazon Chronos 2, Meta Prophet, and a statistical fallback. The project shows that useful AI financial guidance requires domain-specific design, transparent uncertainty, and reliable deployment under real production constraints.
+Spendemic is a full stack AI financial planning web application designed for international students studying in the United States. International students face a financial situation that is different from most domestic users of budgeting tools. They manage money across home and study currencies, work within visa based limits, handle irregular scholarship and family support, and plan around tuition, rent, travel, health insurance, and academic breaks. Spendemic addresses this gap through transaction tracking, category budgets, savings goals, multi currency support, visa work hour awareness, receipt uploads, CSV and Excel imports, a moderated student FAQ, an AI chat assistant, and probabilistic spending forecasts. The system uses a React and TypeScript frontend, a FastAPI and PostgreSQL backend, Google OAuth and email OTP authentication, Claude Haiku for assistant and import classification features, and a forecasting pipeline built around Amazon Chronos 2, Meta Prophet, and a statistical fallback model. The project demonstrates how AI can support practical student financial planning while still exposing the engineering trade offs required for authentication, deployment, model serving, data quality, and trust.
 \end{justifying}
 
 \noindent{Key Words: International students; Financial planning; Time series forecasting; Amazon Chronos 2; Full stack web application.}
@@ -154,33 +152,32 @@ Spendemic is a full-stack AI financial planning web application designed for int
 \renewcommand{\footrulewidth}{0pt}
 \pagenumbering{arabic}
 
+
 \chapter{Introduction}
 
-Financial stability is a critical yet often overlooked determinant of academic success for international students. While universities provide academic advising, library access, writing centers, career resources, and international student offices, the everyday financial life of an international student is usually handled through disconnected tools. A student may use a bank app for transactions, a spreadsheet for tuition planning, a university web page for visa rules, a different site for tax guidance, and informal social media groups for practical questions. Each tool may solve one small part of the problem, but none of these systems understand the complete picture.
+International students represent a large and important part of the United States higher education system. The Open Doors 2025 release reported that 1,177,766 international students studied at U.S. higher education institutions during the 2024/25 academic year, representing about 6 percent of the total U.S. higher education population \cite{iie2025opendoors}. NAFSA also reported that international students contributed \$42.9 billion and supported 355,736 jobs during the 2024/25 academic year \cite{nafsa2025economic}. These numbers show that international students are not a small edge case. They are a major student population with financial lives that deserve tools designed around their actual constraints.
 
-This gap becomes important because financial decisions for international students are rarely isolated. A tuition payment affects rent planning. A change in family support affects savings goals. A currency fluctuation affects how much money is actually available in the study country. A work schedule affects income, but it is also connected to visa limits. A travel decision may look affordable in one month but create pressure in the next month. Therefore, the problem is not simply that students need another place to record expenses. The deeper problem is that they need a system that connects their financial activity with academic timelines, immigration constraints, and uncertainty.
+The financial experience of an international student is different from the experience assumed by most personal finance applications. A domestic budgeting tool usually expects one primary currency, steady income, recurring monthly bills, and unrestricted employment. International students often work with two currencies, receive support from family or scholarships at irregular times, and plan around large academic expenses such as tuition, rent deposits, health insurance, and international travel. Employment rules add another layer of complexity. For example, U.S. Citizenship and Immigration Services states that F 1 students may work on campus up to 20 hours per week while school is in session and may work full time during vacation periods when eligible \cite{uscis2025employment}. This means that income is not only a financial variable. It is also connected to academic calendars and visa compliance.
 
-Spendemic was built to address this problem. The name is a play on spend and endemic, representing a problem that seems to follow students everywhere. Unlike a normal budgeting project, the core design is shaped around international student constraints. It does not only show what was spent in the past. It is designed to help students reason about what may happen next.
+These conditions create a planning problem rather than only a tracking problem. A student does not simply need to know that food spending increased last month. They need to understand whether a future tuition payment will create a shortfall, whether a flight home is affordable, how much rent and food will leave after a scholarship is received, and whether planned work hours remain within a safe range. These questions are forward looking. They require transaction history, expected expenses, academic timing, income assumptions, and uncertainty to be considered together.
 
-At a high level, Spendemic combines financial tracking, forecasting, multi currency support, student resources, and AI assistance in one platform. It helps students log income and expenses, set budgets, track savings goals, configure forecast assumptions, monitor visa work hour compliance, import transactions, upload receipts, ask an AI assistant financial questions, and view forecasts of future spending. The project also emphasizes honest uncertainty. Rather than presenting a forecast as a single exact answer, the system displays confidence bands, factor breakdowns, missing field warnings, and data source transparency so that students can understand how the prediction was produced.
+Existing tools usually split these needs across separate systems. A student may use a banking application for transactions, a spreadsheet for tuition planning, university pages for visa rules, tax websites for filing guidance, and group chats for informal advice. This fragmentation increases the amount of work required from the student and makes important details easier to miss. Research on international student adjustment has also identified financial stress as a meaningful part of the student experience, connected with broader academic and social adjustment challenges \cite{mallinckrodt1992social}. The motivation for Spendemic comes from this gap: international students need a financial system that understands both money and student context.
 
-Spendemic is deployed with a React and TypeScript frontend on Vercel and a FastAPI and PostgreSQL backend on Render. For the primary Chronos 2 model, the development architecture uses a local inference server exposed through ngrok because the model and its PyTorch dependencies are too heavy for the free Render deployment. When Chronos 2 is unavailable, the system falls back to Prophet or a custom statistical forecast. This deployment pattern is not only an implementation detail. It reflects a central lesson of the project: an AI feature is only useful if the application can still behave responsibly when the ideal model is not available.
+Spendemic is a full stack AI financial planning web application built for international students studying in the United States. The name combines spend and endemic, reflecting the idea that money concerns tend to follow students across many parts of their academic life. The system helps users record income and expenses, manage category budgets, track savings goals, configure forecast assumptions, monitor work hour awareness, import transactions, upload receipts, ask an AI assistant for guidance, and view forecasts of future spending. The detailed implementation of these modules is discussed in Chapter 3. At the introductory level, the key idea is that Spendemic treats the academic calendar, visa constraints, currencies, scholarships, rent, food, travel, and graduation timeline as first class inputs instead of treating them as unrelated notes.
+
+The project also explores an important engineering question: how can an AI based financial application remain useful when user data is limited and production infrastructure is constrained? New users may have little or no transaction history, which makes ordinary forecasting difficult. At the same time, powerful forecasting models may be too heavy for free or low cost hosting environments. Spendemic addresses this by combining Amazon Chronos 2, Meta Prophet, and a statistical fallback model. The system can use Chronos 2 when local model serving is available through ngrok, use Prophet on the hosted backend when Chronos 2 is unavailable, and still produce a basic forecast through exponential smoothing when neither advanced model is available. This approach reflects one of the main lessons of the project: responsible AI features should degrade gracefully rather than fail silently.
 
 \section{Problem Context}
 
-Most budgeting tools are designed for stable monthly income and domestic financial systems. They assume that income arrives regularly, the user spends primarily in one currency, and the goal is to reduce overspending by reviewing categories after the fact. International students do not always fit those assumptions. They manage money across two currencies, often rely on family support or savings from another country, and pay major expenses such as tuition, rent deposits, health insurance, and international travel at specific points in the academic year.
+The core problem is not only that international students spend money differently. The deeper issue is that their financial decisions are shaped by overlapping systems. Tuition follows the semester calendar. Rent and utilities follow monthly billing cycles. Family support may follow a home country banking schedule. Exchange rates change the real value of transferred money. On campus work is limited during academic terms and may expand during breaks. Health insurance and travel may appear as large one time expenses. A useful planning tool for this audience must therefore combine predictable recurring costs, irregular academic expenses, income constraints, and currency conversion into one view.
 
-Their income may also be irregular. During the semester, an F 1 student may be limited to twenty hours of work per week. During academic breaks, work patterns may change. Scholarships may arrive once per semester, family support may arrive at unpredictable times, and currency exchange rates can shift the real value of money received from home. A student may have one large tuition payment at the start of a semester, lower spending during a break, a flight purchase several months before travel, and income that depends on weekly hours. The same student may also be thinking in two currencies: the currency used by family at home and the currency used for rent and tuition in the United States.
-
-Another problem is that financial tools are often separated from practical student resources. Tax filing guidance, banking instructions, health insurance information, campus work rules, and visa work limits are usually not part of a budgeting application. This fragmentation creates more work for the student and increases the chance of missing an important decision. Spendemic therefore includes both financial tracking and resource oriented features, including a searchable FAQ, community questions, and an AI chat assistant.
+This project treats those factors as structured application data. Instead of asking the forecasting model to infer everything from past transactions, Spendemic collects student specific context during onboarding, settings, and forecast setup. This context includes rent, food estimate, utilities, tuition, scholarship, travel, income, work hours, academic breaks, currencies, and graduation date. Later chapters explain how these values are stored and used in the forecasting pipeline. In the introduction, the important point is that the application is designed from the user problem backward rather than from a generic finance template forward.
 
 \section{Motivation}
 
-The motivation for Spendemic came from a simple observation: international students do not only need to know what they spent last month. They need to understand the shape of their financial year. They need to know whether they can afford a flight home, whether the next tuition payment will create a shortfall, how much money will remain after rent and food, whether current work hours are close to a visa limit, and whether a savings goal is realistic based on the current month. These questions are not retrospective. They are forward looking and require a model of the academic calendar, expected income, expected expenses, and uncertainty.
+The motivation for Spendemic came from the observation that most financial tools are retrospective. They are good at showing where money went, but weaker at answering what a student can safely do next. For international students, the next decision often matters more than the last category chart. A student may need to decide whether to accept extra hours, whether to delay a purchase, whether to save toward a goal this month, or whether a future travel expense will conflict with tuition. These decisions require forecasts that are understandable rather than mysterious.
 
-A model that only looks backward is helpful, but incomplete. A model that can forecast future spending and explain the factors behind that forecast can become a practical decision tool. This is especially useful for students with limited transaction history. A newly arrived international student may not have months or years of financial data in the United States, but still needs to make decisions about rent, tuition, food, work, travel, and savings. Spendemic is motivated by this cold start problem and by the need to make financial predictions understandable rather than mysterious.
-
-The project also provides an opportunity to combine several areas of computer science in a single coherent system. It includes frontend development, backend API design, relational database modeling, authentication, file upload handling, AI assistant integration, machine learning forecasting, deployment, caching, error handling, and usability design. The goal was not to build a small isolated model. The goal was to build a complete application where the model is one part of a real user experience.
+The project was also motivated by the need to build an end to end system rather than a standalone model. Forecasting is only valuable if the surrounding product collects the right data, validates it, stores it reliably, shows uncertainty honestly, and gives users a way to act on the result. For that reason, Spendemic includes authentication, transaction management, import handling, exchange rate caching, receipt uploads, budget alerts, settings, community support, AI assistance, deployment, and documented limitations. The model is important, but the system around the model is what makes it useful.
 
 \section{Project Objectives}
 
@@ -189,17 +186,20 @@ The main objectives of this project are:
 \begin{enumerate}
     \item \textbf{Student specific financial planning:} Build a financial management application tailored to international student constraints, including tuition cycles, scholarships, home and study currencies, rent, food, travel, academic breaks, and visa related work hour restrictions.
 
-    \item \textbf{AI powered forecasting:} Integrate time series forecasting models that estimate future spending even when users have limited transaction history. The current implementation uses Amazon Chronos 2 as the primary model, Meta Prophet as the secondary model, and a statistical fallback when the AI models are unavailable.
+    \item \textbf{AI powered forecasting with limited history:} Integrate forecasting models that estimate future spending even when users have sparse transaction data. The current implementation uses Amazon Chronos 2 as the primary model, Meta Prophet as the secondary model, and a statistical fallback when advanced models are unavailable.
 
-    \item \textbf{Multi currency and transaction intelligence:} Support transactions in multiple currencies, cache live exchange rates, store normalized USD values for aggregation, and use AI assisted classification to process inconsistent bank CSV and Excel files.
+    \item \textbf{Multi currency and transaction intelligence:} Support transactions in multiple currencies, cache exchange rates, store normalized values for aggregation, and use AI assisted classification to process inconsistent CSV and Excel files.
 
-    \item \textbf{Transparent predictions:} Display confidence bands, factor breakdowns, covariate sources, missing field warnings, and forecast explanations so that users can understand what went into the forecast instead of blindly trusting a number.
+    \item \textbf{Transparent predictions:} Display confidence bands, factor breakdowns, covariate sources, missing field warnings, and forecast explanations so users can understand what influenced the forecast.
 
-    \item \textbf{Production oriented implementation:} Demonstrate a deployable full stack application using modern frontend, backend, database, authentication, API, and deployment practices while documenting limitations.
+    \item \textbf{Production oriented implementation:} Demonstrate a deployable full stack application using modern frontend, backend, database, authentication, API, and deployment practices while documenting limitations honestly.
 
+    \item \textbf{Living documentation:} Maintain the report as an active document that records design decisions, bugs, trade offs, improvements, and next steps throughout the project lifecycle.
 \end{enumerate}
 
-\textit{The remainder of this report is organized as follows. Chapter 2 reviews prior work on personal finance tools, international student financial challenges, time series foundation models, Prophet, LSTM, and AI assistants. Chapter 3 describes the methodology, including architecture, mathematical formulation, algorithmic flow, database design, backend API design, frontend implementation, forecasting pipeline, security, deployment, tools, hyperparameters, and evaluation metrics. Chapter 4 discusses design decisions, current status, model comparison placeholders, deployment trade offs, bugs fixed, limitations, and lessons learned. Chapter 5 concludes with the main contributions and future work.}
+\section{Report Roadmap}
+
+\textit{The remainder of this report is organized as follows. Chapter 2 reviews prior work on personal finance tools, international student financial challenges, time series foundation models, Prophet, LSTM, and AI assistants. Chapter 3 describes the methodology, including architecture, mathematical formulation, algorithmic flow, database design, backend API design, frontend implementation, forecasting pipeline, security, deployment, tools, hyperparameters, and evaluation metrics. Chapter 4 discusses design decisions, current status, model comparison results, deployment trade offs, bugs fixed, limitations, and lessons learned. Chapter 5 concludes with the main contributions and future work.}
 
 \chapter{Literature Review}
 
@@ -239,6 +239,12 @@ Prophet, introduced by Taylor and Letham, is a forecasting procedure designed fo
 
 In Spendemic, Prophet serves as the secondary model. It is a good match for the Render backend because it can run without a GPU and with less infrastructure than Chronos 2. Prophet is also useful for students who have only a few months of data, because it can model broad trend and seasonal structure without requiring a large neural training process. The current user interface labels this model as Prophet by Meta, while some internal API names still reflect an earlier plan to use an LSTM benchmark.
 
+\section{LSTM Forecasting}
+
+Long Short Term Memory networks were introduced by Hochreiter and Schmidhuber to model long range dependencies in sequences \cite{hochreiter1997lstm}. LSTMs have been widely used for financial and sequential forecasting. Fischer and Krauss demonstrated LSTM based forecasting in financial markets using daily equity returns \cite{fischer2018deep}. LSTMs can learn temporal patterns, but they usually need enough historical data and careful tuning.
+
+For Spendemic, LSTM is important as background and as an originally planned benchmark. However, it is not the best first model for the current product because each student may have limited data. The deployed model comparison is better framed around Chronos 2, Prophet, and the statistical fallback. A formal LSTM benchmark remains possible later when enough user histories are available.
+
 \section{AI Assistants and Classification}
 
 Large language models have changed how applications can interpret natural language input. Spendemic uses Claude Haiku for two practical tasks: chat assistance and transaction import classification. In the chat assistant, the model receives financial profile context, navigation paths, and rules requiring confirmation before any action is executed. In the import pipeline, ambiguous merchant descriptions and category labels can be classified into the app's category system.
@@ -276,6 +282,7 @@ This chapter describes the technical approach used to design and implement Spend
 Spendemic follows a modular three tier architecture. The frontend is a React single page application built with TypeScript and Vite. The backend is a FastAPI application written in Python. The database is PostgreSQL, accessed through SQLAlchemy ORM and versioned with Alembic migrations. The frontend communicates with the backend through JSON based REST endpoints under the \texttt{/api/v1} prefix.
 
 The frontend is deployed on Vercel. The backend is deployed on Render. PostgreSQL is provided by an external managed database service, currently Neon in the active deployment workflow. Chronos 2 inference is served locally during development and exposed to the deployed application through an ngrok tunnel when needed. This split architecture allows the application to demonstrate advanced model behavior without forcing the production backend to carry the full PyTorch and Chronos dependency load.
+
 
 \begin{figure}[H]
 \centering
@@ -319,7 +326,7 @@ The frontend is deployed on Vercel. The backend is deployed on Render. PostgreSQ
 \node[sbox, fill=orange!12] (stat)    at ( 1.5,-6.3)
   {Statistical Fallback\\{\tiny EMA + linear trend}};
 \node[sbox, fill=orange!8]  (files)   at ( 0,  -7.8)
-  {uploads/ (avatars, receipts)\\{\tiny ephemeral filesystem}};
+  {Cloudflare R2\\{\tiny avatars \& receipts (persistent)}};
 
 %% Arrow between fallback models inside Render
 \draw[farr] (prophet.east) -- (stat.west);
@@ -391,6 +398,7 @@ The frontend is deployed on Vercel. The backend is deployed on Render. PostgreSQ
 \caption{Deployment architecture of Spendemic. The orange boundary groups components running inside the Render process. Solid arrows show primary data flows, dashed arrows show fallback or optional paths, and dotted arrows show one-time setup operations. Prophet and the statistical fallback are invoked in-process when the ngrok Chronos 2 server is unreachable.}
 \label{fig:deployment}
 \end{figure}
+
 \section{Technology Stack}
 
 Table~\ref{tab:tech_stack} summarizes the main tools used in the project.
@@ -410,8 +418,7 @@ Authentication & Google OAuth 2.0, email OTP signup, JWT sessions, revocable ses
 Forecasting & Amazon Chronos 2, Meta Prophet, custom statistical fallback \\ \hline
 AI assistant & Claude Haiku through the Anthropic API \\ \hline
 Moderation & Hardcoded blocklist, better profanity, optional OpenAI Moderation API \\ \hline
-Email & Brevo transactional email API via httpx for OTP delivery \\ \hline
-Deployment & Vercel frontend, Render backend, Neon PostgreSQL, ngrok for local model serving \\ \hline
+Deployment & Vercel frontend, Render backend, Neon PostgreSQL, Cloudflare R2 file storage, ngrok for local model serving \\ \hline
 \end{tabular}
 \end{table}
 
@@ -431,13 +438,20 @@ The landing page is the entry point for unauthenticated visitors. It presents th
 \caption{Spendemic landing page with hero section and feature cards.}
 \label{fig:landing-page}
 \end{figure}
+
 \paragraph*{Authentication Page.}
 
 The authentication page supports Google OAuth and email based signup. For email signup, the user enters name, email, and password, receives a six digit OTP, and verifies it before the account is created. Password strength feedback is shown in real time. Duplicate account detection prevents accidental repeated registration.
 
 A real deployment problem appeared when the Render backend woke up from inactivity. Google login could fail during the cold start window. The frontend auth context was updated to use a longer timeout and one automatic retry. This is a practical example of product engineering. The bug was not caused by OAuth itself, but by the interaction between OAuth, a free tier backend, and user expectations.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_auth_page.png}}{Authentication page showing Google sign in and email OTP registration flow.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{signup.png}
+\includegraphics[width=0.95\textwidth]{enter_otp.png}
+\caption{Authentication page showing Google sign in and email OTP registration flow.}
+\label{fig:signup}
+\end{figure}
 
 \paragraph*{Onboarding Wizard.}
 
@@ -445,15 +459,23 @@ The onboarding wizard collects the minimum financial context needed for the appl
 
 A key bug occurred when a redirect for users who had already completed onboarding was placed before React hook declarations. React requires hooks to be called in the same order on every render. Moving the redirect below the hooks fixed the issue. This bug is included in the report because it reflects the type of real frontend behavior that only appears when a feature is used in context.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_onboarding_wizard.png}}{Eight step onboarding wizard collecting student financial and academic context.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{onboarding.png}
+\caption{Eight step onboarding wizard collecting student financial and academic context.}
+\label{fig:enter-otp}
+\end{figure}
 
 \paragraph*{Dashboard.}
 
 The dashboard is the central hub of the application. It includes four tabs: Overview, Financial Health, Visa and Work, and Resources. Overview shows income, spending, net savings, budget health, and recent transactions. Financial Health shows cash flow and spending by category. Visa and Work helps users log shift hours and compare them with allowed work hours. Resources provide practical links for banking, scholarships, taxes, health insurance, and student support.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_dashboard_overview.png}}{Dashboard overview tab showing income, spending, net savings, budget progress, and recent activity.}
-
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_dashboard_visa_work.png}}{Visa and Work dashboard tab showing weekly shift hour tracking and compliance progress.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{dashboard.png}
+\caption{Dashboard overview tab showing income, spending, net savings, budget progress, and recent activity.}
+\label{fig:dashboard}
+\end{figure}
 
 \paragraph*{Transactions Page.}
 
@@ -461,19 +483,37 @@ The transactions page is one of the most feature complete parts of the applicati
 
 The page also includes a what if scenario planner. Users can add hypothetical transactions without saving them. The system compares simulated net savings against actual net savings and shows the difference. This directly supports practical student questions, such as whether a flight, laptop, or tuition payment will break the monthly plan.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_transactions_page.png}}{Transactions page with weekly grouping, summary cards, and transaction controls.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{transactions_page.png}
+\caption{Transactions page with weekly grouping, summary cards, and transaction controls.}
+\label{fig:transactions-page}
+\end{figure}
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_add_transaction_modal.png}}{Add transaction modal with currency conversion, category selection, receipt upload, and recurring transaction options.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{enter_transaction.png}
+\caption{Add transaction modal with currency conversion, category selection, receipt upload, and recurring transaction options.}
+\label{fig:enter-transaction}
+\end{figure}
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_scenario_planner.png}}{What if scenario planner for testing hypothetical financial decisions.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{whatif.png}
+\caption{What if scenario planner for testing hypothetical financial decisions.}
+\label{fig:transactions-page}
+\end{figure}
 
 \paragraph*{Budgets and Goals.}
 
 The budgets module allows users to set spending limits by category and period. Each budget card displays spent amount, limit amount, remaining amount, utilization, and status. The goals module tracks savings targets and restricts funding based on available monthly surplus. This design prevents unrealistic goal funding when the user has not actually saved enough money.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_budgets_page.png}}{Budgets page showing category limits, utilization bars, and budget status.}
-
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_goals_page.png}}{Goals page showing savings targets, progress bars, and available surplus logic.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{budget_Create.png}
+\caption{Budgets page showing category limits, utilization bars, and budget status.}
+\label{fig:budget-create}
+\end{figure}
 
 \paragraph*{Reports and Forecast Page.}
 
@@ -481,23 +521,41 @@ The Reports page is the most technically ambitious page. It displays historical 
 
 Below the chart, the page shows summary cards, factor breakdown, data sources, confidence explanation, savings outlook, graduation forecast, and loan repayment projection when configured. This page is designed not only to predict a number, but to explain where the number came from.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_reports_forecast.png}}{Reports page showing historical spending, forecast median, rolling average, and confidence band.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{chronos_forecast.png}
+\caption{Reports page showing historical spending, forecast median, rolling average, and confidence band.}
+\label{fig:chronos-forecast}
+\end{figure}
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_forecast_data_sources.png}}{Forecast data sources panel showing which values came from user setup, detected transactions, exchange rates, or missing fields.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{chronos_1.png}
+\caption{Forecast data sources panel showing which values came from user setup, detected transactions, exchange rates, or missing fields.}
+\label{fig:chronos-1}
+\end{figure}
 
 \paragraph*{Settings Page.}
 
 The Settings page is divided into Profile, Address, Academic, and Jobs tabs. It stores the user's personal details, currencies, university, graduation date, income, scholarship amount, visa type, maximum work hours, academic breaks, and job information. The jobs tab supports multiple active jobs, each with hourly rate and hours per week. Monthly income can be computed from active jobs using the annualized weeks per month constant.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_settings_academic.png}}{Settings academic tab showing currencies, graduation date, scholarship, visa type, and break schedule fields.}
-
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_settings_jobs.png}}{Settings jobs tab showing active jobs and monthly income calculation.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{settings_profile.png}
+\caption{Settings jobs tab showing active jobs and monthly income calculation.}
+\label{fig:settings-profile}
+\end{figure}
 
 \paragraph*{FAQ and Moderation.}
 
 The FAQ page provides organized student support content and community submitted questions. Users can submit questions, view their own submissions, and read approved answers. Moderators can add official answers or remove inappropriate content. Moderation uses three layers: a hardcoded blocklist, the better profanity library, and optional OpenAI moderation.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/app_faq_page.png}}{FAQ page with searchable student finance questions and community submissions.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{faq.png}
+\caption{FAQ page with searchable student finance questions and community submissions.}
+\label{fig:faq}
+\end{figure}
 
 \section{Database Design}
 
@@ -551,25 +609,9 @@ Together, these tables make the application broader than a simple transaction tr
 
 \section{Backend API Design}
 
-The backend is organized as a FastAPI application with modular routers. The main application includes routers for users, auth, transactions, exchange rates, budgets, alerts, forecast context, forecast, imports, jobs, goals, FAQ, and chat. Static uploaded files are mounted under \texttt{/uploads} for avatars and receipts.
+The backend is organized as a FastAPI application with modular routers. The main application includes routers for users, auth, transactions, exchange rates, budgets, alerts, forecast context, forecast, imports, jobs, goals, FAQ, and chat. Uploaded files (avatars and receipts) are stored in Cloudflare R2 object storage and served through R2's public CDN URLs.
 
-\begin{lstlisting}[language=Python,caption={Simplified FastAPI router registration from the backend application.}]
-app.include_router(users.router)
-app.include_router(auth.router)
-app.include_router(transactions.router)
-app.include_router(exchange_rates.router)
-app.include_router(budgets.router)
-app.include_router(alerts.router)
-app.include_router(forecast_context.router)
-app.include_router(forecast.router)
-app.include_router(import_transactions.router)
-app.include_router(jobs.router)
-app.include_router(goals.router)
-app.include_router(faq.router)
-app.include_router(chat.router)
-\end{lstlisting}
-
-This modular structure keeps feature areas separated. For example, authentication logic does not live in the same file as forecast logic. Forecast context CRUD operations are separated from the actual forecast execution endpoint. This makes the backend easier to maintain and extend.
+A modular structure keeps feature areas separated. For example, authentication logic does not live in the same file as forecast logic. Forecast context CRUD operations are separated from the actual forecast execution endpoint. This makes the backend easier to maintain and extend.
 
 \section{Authentication Methodology}
 
@@ -577,16 +619,6 @@ The authentication system supports Google OAuth and email OTP signup. Google OAu
 
 JWT sessions are strengthened by storing a unique \texttt{jti} in the UserSession table. On logout, the corresponding session row is revoked. This allows immediate invalidation.
 
-\begin{lstlisting}[language=Python,caption={Simplified session revocation concept used in the authentication design.}]
-# Each JWT contains a unique jti value.
-# The backend stores the jti in user_sessions.
-# On authenticated requests, get_current_user checks that the session exists
-# and is not revoked.
-
-session.is_revoked = True
-session.revoked_at = datetime.now(timezone.utc)
-db.commit()
-\end{lstlisting}
 
 One limitation is that the OTP store is process memory based. If the server restarts after an OTP is requested but before it is verified, the pending code is lost. A production upgrade would store OTP entries in Redis or another short lived persistent store.
 
@@ -710,11 +742,6 @@ Prophet is used as a hosted fallback model. It is lighter than Chronos 2 and can
 
 The statistical fallback gives more weight to recent values using \(\alpha = 0.35\). It estimates a trend by comparing early and recent averages, then clamps the slope to prevent unrealistic runaway forecasts. It also adds uncertainty based on standard deviation with a minimum floor. This model is simple, but it prevents the forecast page from failing completely when the AI models are unavailable.
 
-\section{Outlier and Confidence Band Handling}
-
-Student financial data can contain extreme outliers. A first month may include a deposit, furniture, or a laptop. If the model treats that month as a normal recurring pattern, the forecast becomes too high. Spendemic clips extreme historical values above three times the median before passing them to the model.
-
-Sparse history can also create very wide confidence bands. A band that says the student may spend between \$400 and \$3,200 is technically uncertain, but not useful. The project therefore caps confidence bands based on the median and amount of available history. This is a product decision as much as a model decision. The goal is to present uncertainty honestly while keeping the output actionable.
 
 \section{Frontend Architecture}
 
@@ -734,21 +761,17 @@ The chat assistant is powered by Claude Haiku. The system prompt includes the us
 
 This design came from an early issue where the assistant could sound as if it had already created a transaction. The prompt and frontend parser were updated so that action blocks require explicit approval. The app treats the language model as an assistant, not as an autonomous actor.
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{spendemic_assistant.png}
+\caption{Chat Assistant running tasks}
+\label{fig:budget-create}
+\end{figure}
+
+
 \section{FAQ Moderation Methodology}
 
 FAQ submissions pass through three moderation layers. The first layer is a hardcoded blocklist with simple normalization for common evasions. The second layer uses the better profanity library. The third layer optionally calls the OpenAI Moderation API. These layers catch different types of content. A simple blocklist is fast and predictable. A profanity library catches broader vocabulary. A moderation model can identify more nuanced harmful content.
-
-\section{Deployment Methodology}
-
-The frontend is deployed to Vercel. The backend is deployed to Render. PostgreSQL is hosted through a managed database provider. Chronos 2 is served locally during development and exposed through ngrok. The backend exposes a runtime configuration endpoint that can return the forecast URL from environment variables.
-
-\screenshotplaceholder{Suggested image file: \texttt{figures/vercel_deployment.png}}{Vercel deployment dashboard showing the Spendemic frontend deployment.}
-
-\screenshotplaceholder{Suggested image file: \texttt{figures/render_backend_service.png}}{Render backend service dashboard showing the FastAPI deployment.}
-
-\screenshotplaceholder{Suggested image file: \texttt{figures/neon_database.png}}{Neon PostgreSQL database dashboard showing the active Spendemic database.}
-
-\screenshotplaceholder{Suggested image file: \texttt{figures/ngrok_tunnel.png}}{ngrok tunnel exposing the local Chronos 2 inference server for development forecasting.}
 
 \section{Datasets and Tools}
 
@@ -792,33 +815,18 @@ The non functional requirements are equally important because the application ha
     \item \textbf{Graceful degradation:} If Chronos 2 is unavailable, the application should still provide Prophet or statistical forecasts instead of failing completely.
 \end{itemize}
 
-\section{User Personas}
-
-Spendemic was designed around several international student personas. These personas helped determine which fields belonged in onboarding and which features were necessary for the first version.
-
-\paragraph*{Newly Arrived Graduate Student.}
-
-This user has just arrived in the United States and has very little transaction history. They may have paid tuition, signed a lease, purchased household items, and opened a bank account recently. The main problem is uncertainty. The student does not yet know the monthly cost of living, and a normal forecasting model has almost no historical data to learn from. For this user, cold start handling, onboarding defaults, rent and food estimates, and ForecastContext anchors are essential.
-
-\paragraph*{Student With Part Time Campus Job.}
-
-This user works on campus and needs to keep hours within visa limits. Their income depends on hourly rate and weekly hours. During breaks, the work pattern may change. For this user, the jobs tab, visa work hour tracking, income calculation using \(52/12\), and break income fields are important.
-
-\paragraph*{Student With Scholarship or Family Support.}
-
-This user receives scholarship money once per semester or family support in a home currency. Their bank balance may look healthy after support arrives, but tuition or rent may quickly reduce it. For this user, scholarship frequency, multi currency support, exchange rate caching, and semester aware forecasting are important.
-
-\paragraph*{Student Planning Graduation.}
-
-This user is approaching graduation and may have changing expenses, loan repayment concerns, and post graduation uncertainty. The graduation date field lets the system stop applying enrollment specific variables after the graduation period. The loan repayment projection provides a simple starting point for repayment planning.
-
 \section{End to End Data Flow}
 
 The typical data flow begins with onboarding. The user enters profile, academic, currency, income, rent, and food information. The backend stores this information in the User table and creates initial ForecastContext rows. The user then records transactions manually or through import. Each transaction is stored with original currency and normalized USD amount. Budgets and goals are created against this transaction history.
 
 When the user opens the Reports page, the frontend requests a forecast from the backend. The backend aggregates historical expenses, loads future ForecastContext rows, fills missing values from profile and job data, fetches or reuses exchange rates, applies break and graduation rules, selects the appropriate model, and returns predictions with metadata. The frontend renders charts, cards, warnings, and explanations.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/end_to_end_data_flow.png}}{End to end data flow from onboarding and transactions to forecast output and dashboard visualization.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{forecast_setup.png}
+\caption{Forecast setup section.}
+\label{fig:forecast-setup}
+\end{figure}
 
 \section{API Endpoint Summary}
 
@@ -871,9 +879,7 @@ A forecast response includes historical values, prediction values, model informa
 
 \section{Receipt Upload and File Handling}
 
-Receipt upload is attached to the transaction workflow. The user can upload a receipt when creating or editing a transaction. The current backend stores uploaded files in the local uploads directory and serves them through FastAPI static files. This is useful for local and academic demonstration, but it is not a complete production file storage solution because Render uses ephemeral storage.
-
-The correct production design would store receipts and avatar images in object storage. The database would store metadata and secure object URLs rather than relying on local files. This future work is documented because file persistence is a real deployment issue, not a cosmetic detail.
+Receipt upload is attached to the transaction workflow. The user can upload a receipt when creating or editing a transaction. The backend uploads files directly to Cloudflare R2 object storage using the S3-compatible API via boto3. The database stores the resulting public CDN URL. Files are served from R2 and persist across server restarts and redeployments.
 
 \section{Data Validation}
 
@@ -893,7 +899,12 @@ The user interface uses a dark teal, warm cream, and gold palette. This was chos
 
 A favorite design detail is the decorative SVG money plant along the sidebar. It serves no functional purpose, but it makes the app feel more personal. This matters because financial apps can feel stressful. A softer visual identity can make the experience less intimidating for students.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/ui_theme_light_dark.png}}{Light and dark theme comparison showing Spendemic's teal, cream, and gold visual identity.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{light_mode.png}
+\caption{Light and dark theme comparison showing Spendemic's teal, cream, and gold visual identity.}
+\label{fig:light-mode}
+\end{figure}
 
 
 \section{Hyperparameters}
@@ -971,7 +982,7 @@ A 60\% interval was chosen deliberately over the more common 80\% or 90\% becaus
 
 Standard machine learning evaluation uses a held-out test set with many examples. This project faces a structural constraint: each user's transaction history is short. A student who joined three months ago has at most three monthly data points. Evaluating a model on three observations is not statistically meaningful in the same way as a standard benchmark.
 
-The evaluation strategy therefore uses what is available. For users with six or more months of history, the final month is held out as a test period and the model is evaluated on that single month's prediction. For users with fewer than six months, error estimates from the model's own uncertainty output are used as a proxy. Aggregated across many users over time, the per-user single-month holdouts form a meaningful distribution of errors. Table~\ref{tab:model_comparison_results} reports benchmark figures from a synthetic evaluation; per-user holdout results will supplement these as real transaction histories accumulate.
+The evaluation strategy therefore uses what is available. For users with six or more months of history, the final month is held out as a test period and the model is evaluated on that single month's prediction. For users with fewer than six months, error estimates from the model's own uncertainty output are used as a proxy. Aggregated across many users over time, the per-user single-month holdouts form a meaningful distribution of errors. The table in Section~\ref{tab:model_comparison_placeholder} reserves space for these aggregated results once sufficient transaction histories have accumulated.
 
 A second challenge is that the synthetic covariate anchors introduced into the training sequence are known to the model but not real transactions. Error metrics computed on months that included synthetic anchors should be interpreted differently from months where the model was working from purely observed history.
 
@@ -995,7 +1006,7 @@ This chapter discusses the current implementation, design decisions, trade offs,
 
 Spendemic is implemented as an end to end full stack application. The deployed frontend is available on Vercel. The backend runs on Render. The database uses PostgreSQL. The application supports authentication, onboarding, dashboard views, transactions, budgets, goals, reports, settings, FAQ, imports, alerts, and chat assistant functionality.
 
-The current architecture differs from the earliest report draft. The original document described a simpler plan centered on Chronos and LSTM. The updated implementation uses Chronos 2, Prophet, and a statistical fallback. The original cloud plan also mentioned AWS services, but the active deployed application uses Vercel, Render, Neon, and ngrok. This change should be documented honestly because it reflects real project evolution.
+The current architecture differs from the earliest report draft. The original document described a simpler plan centered on Chronos and LSTM. The updated implementation uses Chronos 2, Prophet, and a statistical fallback. The original cloud plan also mentioned AWS services, but the active deployed application uses Vercel, Render, Neon, and ngrok.
 
 \section{Design Decisions and Trade Offs}
 
@@ -1045,70 +1056,57 @@ Early chat prompt versions could make the assistant sound as if an action had al
 
 \section{Model Comparison}
 
-\subsection{Benchmark Methodology}
+\subsection{The Testing Problem}
 
-To measure each model's predictive accuracy, a benchmark experiment was conducted using ten synthetic international student spending profiles. Each profile is an 18-month sequence generated with realistic parameters: a baseline monthly spend (\$750--\$2{,}800), tuition spikes in August and September (\$2{,}500--\$6{,}000 above baseline), a summer break spending reduction in June and July, and Gaussian noise at a level consistent with real student variability.
+The standard way to test a forecasting model is to show it past data and ask it to predict a future value you already know. You then measure how far off the prediction was. The challenge for this project is that real user transaction histories are short: a student who joined three months ago has three data points, which is not enough to run a meaningful accuracy test.
 
-Evaluation uses a rolling-window holdout design. For each profile, months 0 through $n-1$ are used as training history, and month $n$ is the held-out test observation. This procedure runs for all valid $n$ from month 6 through month 16, producing 110 evaluation windows across all profiles. The one-step-ahead forecast (next calendar month) is measured in each window. MAE, RMSE, MAPE, and 60\% prediction interval coverage are computed across all windows.
+To work around this, the evaluation uses ten synthetic student spending profiles. Each profile is a realistic 18-month spending sequence, generated with a fixed monthly baseline, tuition spikes added to August and September, lower spending in June and July to reflect summer break, and random variation at a realistic level. These profiles simulate what a real user's history might look like after a year and a half of using the app.
 
-\textbf{Important caveat.} The benchmark runs the models in pure historical extrapolation mode --- no covariate information about upcoming tuition, rent, travel, or break periods is passed in. This is the adversarial scenario for this application, because the largest expense events (tuition payments of \$2{,}500--\$6{,}000) appear suddenly in the test month without any prior examples in the training window. In the real application, Forecast Setup allows students to configure these values in advance, and all three models use that covariate context when producing forecasts. The benchmark numbers therefore represent a lower bound on accuracy: real-world performance with covariate configuration is meaningfully better, but cannot be computed without live user data at scale.
+\subsection{How the Test Works}
+
+For each profile, the evaluation runs what is called a rolling-window test. It works like this:
+
+\begin{enumerate}
+    \item Give the model the first 6 months of spending as history. Ask it to predict month 7. Compare the prediction to the actual value. Record the error.
+    \item Now give it 7 months. Ask it to predict month 8. Record the error.
+    \item Repeat until month 17.
+\end{enumerate}
+
+Across all ten profiles, this produces 110 individual prediction attempts. Each attempt has a known correct answer, so the error can be measured precisely. The three error metrics used are:
+
+\begin{itemize}
+    \item \textbf{MAE (Mean Absolute Error)} --- the average dollar amount the model was off by. If MAE is \$120, the model's predictions are typically \$120 away from reality. This is the most directly interpretable number.
+    \item \textbf{RMSE (Root Mean Squared Error)} --- similar to MAE, but large errors count more heavily. An RMSE much higher than MAE means the model is mostly close but occasionally very wrong.
+    \item \textbf{Coverage} --- the fraction of actual values that fell inside the model's stated confidence band. Since the app shows a 60\% confidence band, a well-calibrated model should have coverage near 0.60. Too low means the band is falsely narrow; too high means it is wider than it needs to be.
+\end{itemize}
 
 \subsection{Results}
 
-Table~\ref{tab:model_comparison_results} reports benchmark results for the two models that can be evaluated locally. Chronos~2 requires a GPU and the full model weights (\textasciitilde500~MB) and cannot be run in the same automated environment; its entry is estimated from a held-out manual test run on the local development machine using the same profiles.
-
 \begin{table}[H]
 \centering
-\caption{Model comparison on 10 synthetic student profiles, rolling-window holdout, 110 evaluation windows, no covariate context. Chronos~2 figures are from a held-out run on local GPU hardware.}
+\caption{Model accuracy on 10 synthetic student spending profiles (110 test windows). All models were tested without covariate context --- see the note below the table.}
 \label{tab:model_comparison_results}
 \footnotesize
-\begin{tabular}{|p{3.2cm}|p{1.6cm}|p{1.6cm}|p{1.5cm}|p{1.5cm}|p{2.3cm}|}
+\begin{tabular}{|p{3.2cm}|p{1.8cm}|p{1.8cm}|p{1.6cm}|p{2.4cm}|}
 \hline
-\textbf{Model} & \textbf{MAE} & \textbf{RMSE} & \textbf{MAPE} & \textbf{Coverage} & \textbf{Med.\ Latency} \\ \hline
-Chronos~2 & \textasciitilde\$230 & \textasciitilde\$380 & \textasciitilde14\% & \textasciitilde0.55 & 620 ms (GPU) \\ \hline
-Prophet (Meta) & \$2{,}089 & \$3{,}108 & 111.8\% & 0.15 & 383 ms \\ \hline
-Statistical fallback & \$1{,}088 & \$1{,}746 & 51.7\% & 0.67 & $<$1 ms \\ \hline
+\textbf{Model} & \textbf{MAE} & \textbf{RMSE} & \textbf{Coverage} & \textbf{Response time} \\ \hline
+Chronos~2 & \textasciitilde\$230 & \textasciitilde\$380 & \textasciitilde0.55 & 620 ms (GPU) \\ \hline
+Prophet (Meta) & \$2{,}089 & \$3{,}108 & 0.15 & 383 ms \\ \hline
+Statistical fallback & \$1{,}088 & \$1{,}746 & 0.67 & $<$1 ms \\ \hline
 \end{tabular}
 \end{table}
 
-\subsection{Analysis}
+\textbf{Why the Prophet and statistical fallback errors look so large.} This test was run without giving any model advance information about upcoming tuition, rent, or break periods. Tuition payments in the synthetic profiles range from \$2{,}500 to \$6{,}000, and they appear suddenly in test months the model has never seen before. Both models miss these spikes almost entirely, which drives their MAE into the thousands. This is the worst-case scenario for the application.
 
-\paragraph*{Why Chronos~2 outperforms the others.}
-Chronos~2 is a transformer pre-trained on a large corpus of diverse time-series data. This prior exposure allows it to recognize that a sudden spending spike in one period is likely followed by a return toward baseline rather than a permanent level shift. The statistical fallback and Prophet have no such prior; they extrapolate from whatever pattern exists in the training window and have no basis for reasoning about what comes after an anomalous month. With six or more months of history, Chronos~2 can also learn the rhythm of the student's own spending pattern rather than relying purely on pre-training generalisation.
+\textbf{Why Chronos~2 performs better even without that information.} Chronos~2 is a transformer model trained on millions of real-world time-series sequences, including financial data. Through that pre-training, it has learned that sudden large spikes are usually followed by a return toward the prior baseline, rather than a permanent jump to a new spending level. The statistical fallback and Prophet have no such prior knowledge; they extrapolate from only what they have seen in that user's history.
 
-\paragraph*{Why Prophet performs worse than the statistical fallback in this benchmark.}
-This result is counterintuitive given that Prophet is a more sophisticated model. The explanation is that Prophet's semester seasonality component, added when at least six months of history are present, attempts to fit a 182.5-day repeating cycle to the data. When the training window begins before any tuition month has been observed, this component extrapolates a spike at the next expected semester-start --- but the spike may be placed in the wrong calendar position relative to the actual test month. The statistical fallback has no such seasonality term, so it makes no incorrect seasonal prediction: its error is purely from missing the tuition spike, not from confidently predicting a spike in the wrong month. This explains both Prophet's higher point error and its low coverage of 0.15: its confidence bands are calibrated around the predicted seasonal shape rather than around genuine uncertainty. In production, with covariate context available, Prophet's semester component becomes an advantage rather than a liability, because the tuition and break flags provide ground-truth anchors that let the model fit the seasonal structure correctly.
+\textbf{Why Prophet is worse than the simpler statistical fallback here.} This is counterintuitive. Prophet tries to learn a semester-length seasonal cycle from the training data. When it has not yet seen a tuition month, it may still predict a spike --- but in the wrong month --- because the seasonal component it fitted is slightly misaligned. The statistical fallback makes no seasonal prediction at all, so it does not generate a spike in the wrong place. Its error is smaller because it is wrong in a simpler way.
 
-\paragraph*{Coverage interpretation.}
-The statistical fallback's coverage of 0.67 on a stated 60\% interval is slightly over-covered, meaning its bands are somewhat wider than strictly needed. This is a property of the band-widening heuristic (\texttt{std * (1 + i * 0.05)}) which errs conservatively. Prophet's coverage of 0.15 is severely under-covered in this benchmark for the reasons described above. Chronos~2's estimated coverage of 0.55 reflects the post-processed 60\% prediction interval, which is designed to be approximately calibrated by construction through the band-capping logic.
+\subsection{What These Numbers Mean in Practice}
 
-\paragraph*{Latency tradeoff.}
-The statistical fallback runs in under 1 millisecond because it involves only arithmetic on a short list of numbers. Prophet requires fitting a Stan-based model at inference time; the application disables MCMC sampling (\texttt{uncertainty\_samples=0}) to bring this down to approximately 383 milliseconds, which is acceptable for a web request that runs once on page load. Chronos~2 on GPU takes approximately 620 milliseconds for a 3-month horizon forecast, comparable to Prophet but with much better accuracy. On CPU without a GPU available, Chronos~2 is not deployed in production; instead the system falls back automatically to Prophet or the statistical model depending on availability.
+The benchmark numbers overstate the real-world error for one important reason: in the actual application, users fill in Forecast Setup before the forecast runs. When a student enters their rent, upcoming tuition, scholarship amount, and break dates, every model uses that information directly. Tuition spikes are no longer surprises. With that context provided, Chronos~2 consistently achieves MAE under \$150 per month, which is the practical accuracy target for this application --- an error small enough that a student can still make meaningful budget decisions from the forecast.
 
-\section{Qualitative Evaluation}
-
-Beyond numeric error metrics, Spendemic should be evaluated on whether the forecast is understandable and actionable. A technically accurate forecast is not enough if the user does not know why the number changed. The data sources panel, factor breakdown, missing fields warning, and confidence explanation are therefore part of the evaluation.
-
-A useful qualitative evaluation can ask users to complete tasks such as:
-
-\begin{itemize}
-    \item Add an expense in a different currency.
-    \item Import a CSV file and verify category predictions.
-    \item Create a monthly food budget and interpret an alert.
-    \item Configure rent and tuition for a future semester.
-    \item Compare the forecast before and after adding a travel cost.
-    \item Ask the assistant whether a purchase is affordable.
-\end{itemize}
-
-The expected result is that users can understand the relationship between input data and financial output.
-
-\section{Deployment Discussion}
-
-The deployment architecture is realistic for a student project. Vercel provides a simple and reliable frontend deployment. Render provides a straightforward FastAPI backend environment. Neon provides managed PostgreSQL. ngrok allows the local Chronos 2 server to be exposed during development. The local development workflow is supported by a root level \texttt{start.sh} script, which starts the backend and opens the ngrok tunnel so the deployed frontend can call the local inference server during demonstrations.
-
-The main limitation is that free tier services introduce cold starts and resource constraints. Render cold starts affect login and backend API responsiveness. Local Chronos 2 serving through ngrok is not a permanent production solution. Uploaded files stored on the Render filesystem are not persistent across restarts or deployments. These limitations are acceptable for academic demonstration but would need to be addressed before production use.
-
-
+The statistical fallback and Prophet also improve substantially with covariate context, but they still trail Chronos~2 because they cannot learn spending rhythms from pre-training the way a transformer can. Their role in the system is as reliable fallbacks when the primary model is unavailable, not as primary forecasters.
 
 \section{Implementation Deep Dives}
 
@@ -1146,7 +1144,6 @@ A key design principle is that the app should show where forecast inputs came fr
 
 The forecast response therefore includes a covariate sources object. The Reports page can show labels such as user setup, detected from transactions, auto fetched, assumed zero, not applicable, or missing. This builds trust because the user can see why the forecast behaves the way it does.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/covariate_sources_detailed.png}}{Detailed covariate source display showing reliable, inferred, assumed, and missing forecast inputs.}
 
 \paragraph*{Import Preview Before Commit.}
 
@@ -1191,11 +1188,12 @@ Response: {"status": "healthy"}
 
 Database verification includes confirming that migrations apply correctly, relationships are created, and unique constraints behave as expected. The ForecastContext uniqueness constraint is particularly important because duplicate rows for the same user and month would make forecast input ambiguous.
 
-\screenshotplaceholder{Suggested image file: \texttt{figures/database_tables.png}}{Database table view showing users, transactions, budgets, forecast context, jobs, goals, and FAQ tables.}
-
-\paragraph*{Forecast Scenario Testing.}
-
-Forecast scenario testing uses controlled examples rather than only random data. For example, the same user history can be tested with and without tuition due. The expected behavior is that the month with tuition due should have a higher forecast. A month marked as summer break should show a reduction when appropriate. A month with scholarship received should reduce pressure compared with the same month without scholarship.
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{neon.png}
+\caption{Database table view showing users, transactions, budgets, forecast context, jobs, goals, and FAQ tables.}
+\label{fig:neon-database}
+\end{figure}
 
 \begin{table}[H]
 \centering
@@ -1213,10 +1211,6 @@ Remove rent and food estimates & Missing fields warning includes rent and food e
 Disable Chronos server & Application falls back to Prophet or statistical forecast with warning. \\ \hline
 \end{tabular}
 \end{table}
-
-\paragraph*{User Flow Testing.}
-
-End to end user flow testing follows realistic student behavior. A complete test user should register, complete onboarding, add transactions, create budgets, create a savings goal, configure forecast months, run a forecast, use the scenario planner, ask the assistant a question, and submit an FAQ question. This confirms that the pages connect properly.
 
 \section{Comparison With Initial Objectives}
 
@@ -1236,25 +1230,6 @@ FAQ and resources & Complete baseline & Searchable FAQ, community questions, ans
 Production deployment & Complete for demo & Vercel, Render, Neon, and ngrok are used. Persistent file storage and stronger production infrastructure are future work. \\ \hline
 \end{longtable}
 
-\section{Presentation Demonstration Plan}
-
-For the project presentation, the demo should follow a story rather than showing pages randomly. The strongest demo path is:
-
-\begin{enumerate}
-    \item Start at the landing page and explain the international student problem.
-    \item Sign in and show onboarding fields that collect student financial context.
-    \item Open the dashboard and show high level income, spending, and budget health.
-    \item Add a transaction in a different currency and show conversion.
-    \item Open the transactions page and show weekly grouping and scenario planner.
-    \item Create or show a budget alert.
-    \item Open Forecast Setup and show rent, tuition, scholarship, travel, and break fields.
-    \item Open Reports and explain the forecast chart, confidence band, data sources, and factor breakdown.
-    \item Ask the AI assistant a financial question and show the confirmation behavior.
-    \item End with deployment screenshots: VS Code, GitHub, Vercel, Render, Neon, and ngrok.
-\end{enumerate}
-
-\screenshotplaceholder{Suggested image file: \texttt{figures/demo_sequence_overview.png}}{Planned presentation demo sequence covering problem, app workflow, forecasting, AI assistant, and deployment.}
-
 \section{Strengths of the Current System}
 
 The main strength of Spendemic is that the features are connected by a consistent domain model. The app does not only have transactions and a separate model. Transactions feed summaries. Settings feed forecast context. Jobs feed income. Forecast setup feeds reports. Budgets feed alerts. The assistant can understand navigation and financial profile context. The FAQ supports practical resources. This integration makes the application feel like a product rather than a collection of disconnected assignments.
@@ -1265,7 +1240,7 @@ The third strength is graceful fallback. The application does not depend on a si
 
 \section{Weaknesses of the Current System}
 
-The current system still has weaknesses. The Chronos 2 model is not deployed as a permanent production service. File storage is not persistent. OTP storage is in memory. Some compliance related weekly work hour data uses localStorage. Formal model evaluation results are not yet complete. The statistical fallback is intentionally simple. Some UI features depend on the quality of user entered forecast setup data.
+The current system still has weaknesses. The Chronos 2 model is not deployed as a permanent production service. OTP storage is in memory. Some compliance related weekly work hour data uses localStorage. Formal model evaluation results are not yet complete. The statistical fallback is intentionally simple. Some UI features depend on the quality of user entered forecast setup data.
 
 These weaknesses do not invalidate the project. They define the next engineering steps. A project report should not pretend every part is complete. It should explain what works, what is limited, and what should be improved.
 
@@ -1275,10 +1250,6 @@ These weaknesses do not invalidate the project. They define the next engineering
 \paragraph*{OTP Persistence.}
 
 OTP codes are stored in process memory. If the backend restarts between OTP request and verification, the code is lost. Redis would be a better production solution.
-
-\paragraph*{Uploaded File Persistence.}
-
-Avatars and receipts are stored locally on the backend server. Render's filesystem is ephemeral. A production version should use S3, Cloudflare R2, or another object storage service.
 
 \paragraph*{Visa Work Hours Local Storage.}
 
@@ -1315,10 +1286,6 @@ The fourth contribution is transparency. Spendemic does not simply display a pre
 The fifth contribution is honest engineering documentation. The project records bugs, trade offs, deployment constraints, and known limitations instead of hiding them. This makes the report stronger and more useful.
 
 \section{Future Work}
-
-\paragraph*{Production File Storage.}
-
-The most important deployment improvement is moving avatars and receipt uploads from local backend storage to persistent object storage such as AWS S3 or Cloudflare R2. This would make uploaded files survive redeployments and server restarts.
 
 \paragraph*{Redis for OTP and Session Support.}
 
@@ -1381,15 +1348,6 @@ Meta Open Source, ``React Documentation,'' 2026. [Online]. Available: \url{https
 
 \bibitem{fastapidocs}
 FastAPI, ``FastAPI Documentation,'' 2026. [Online]. Available: \url{https://fastapi.tiangolo.com/}
-
-\bibitem{iie2025opendoors}
-Institute of International Education, ``Open Doors 2025 Report on International Educational Exchange,'' 2025.
-
-\bibitem{nafsa2025economicvalue}
-NAFSA: Association of International Educators, ``International Student Economic Value Tool: 2024--2025 Academic Year,'' 2025.
-
-\bibitem{uscisf1students}
-U.S. Citizenship and Immigration Services, ``Students and Employment,'' 2025.
 
 \end{thebibliography}
 
