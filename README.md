@@ -57,6 +57,8 @@ A full-stack AI-powered financial planning web application built specifically fo
 | Secondary ML | Meta Prophet (decomposable time-series) |
 | AI Assistant | Claude Haiku via Anthropic API |
 | Exchange Rates | ExchangeRate-API with PostgreSQL cache |
+| File Storage | Cloudflare R2 (avatars and receipts, persistent) |
+| Transactional Email | Brevo (HTTP API via httpx) |
 | Frontend Hosting | Vercel |
 | Backend Hosting | Render (free tier) |
 | Database | PostgreSQL (Neon, external managed) |
@@ -97,6 +99,7 @@ financial-planner/
 │   ├── models.py               # SQLAlchemy ORM models + all enums
 │   ├── schemas.py              # Pydantic request/response schemas
 │   ├── database.py             # SQLAlchemy engine and session
+│   ├── storage.py              # Cloudflare R2 upload/delete helpers (boto3)
 │   ├── main.py                 # FastAPI app, CORS, Chronos background load
 │   ├── faq_data.json           # Static FAQ seed data
 │   ├── requirements.txt        # Full deps including torch + chronos
@@ -141,12 +144,14 @@ cp .env.example .env
 | `DATABASE_URL` | Yes | PostgreSQL connection string |
 | `SECRET_KEY` | Yes | JWT signing secret (generate with `openssl rand -hex 32`) |
 | `GOOGLE_CLIENT_ID` | Yes | Google OAuth client ID |
-| `SMTP_HOST` | Yes | SMTP server (e.g. `smtp.gmail.com`) |
-| `SMTP_PORT` | Yes | SMTP port (e.g. `587`) |
-| `SMTP_USER` | Yes | Sender email address |
-| `SMTP_PASSWORD` | Yes | SMTP app password |
+| `BREVO_API_KEY` | Yes | Brevo transactional email API key — required for OTP delivery |
 | `EXCHANGE_RATE_API_KEY` | Recommended | ExchangeRate-API key; falls back to static rates if absent |
 | `ANTHROPIC_API_KEY` | Recommended | Claude Haiku — required for chat assistant and import classification |
+| `R2_ACCOUNT_ID` | Recommended | Cloudflare account ID — required for avatar and receipt uploads |
+| `R2_ACCESS_KEY_ID` | Recommended | Cloudflare R2 S3-compatible access key |
+| `R2_SECRET_ACCESS_KEY` | Recommended | Cloudflare R2 S3-compatible secret key |
+| `R2_BUCKET_NAME` | Recommended | R2 bucket name (default: `spendemic-uploads`) |
+| `R2_PUBLIC_URL` | Recommended | R2 public development URL for serving uploaded files |
 | `ALLOWED_ORIGINS` | No | Comma-separated CORS origins (default: `http://localhost:5173`) |
 | `FORECAST_API_URL` | No | Public URL of the local ML server (set automatically by `start.sh`) |
 | `DEBUG` | No | `True` to print OTPs to console instead of sending email |
@@ -214,6 +219,7 @@ The application uses a split deployment model:
 | Frontend | Vercel | Static SPA with `vercel.json` rewrite rule |
 | Backend | Render (free tier) | `requirements-prod.txt` excludes torch/chronos; Prophet is used |
 | Database | Neon (PostgreSQL) | External managed, connected via `DATABASE_URL` |
+| File Storage | Cloudflare R2 | Avatars and receipts; persistent across redeploys; served via public CDN URL |
 | Chronos-2 model | Local machine + ngrok | Optional; improves forecast quality when running |
 
 **Deploy backend to Render**: connect the repository, set the environment variables listed above, set the build command to `pip install -r requirements-prod.txt` and the start command to `uvicorn main:app --host 0.0.0.0 --port $PORT`.

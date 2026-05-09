@@ -974,7 +974,7 @@ For a 60\% prediction interval to be calibrated, the actual observed value shoul
 \text{Coverage} = \frac{1}{n}\sum_{i=1}^{n}\mathbf{1}\left[Q_{0.2,i} \leq y_i \leq Q_{0.8,i}\right]
 \end{equation}
 
-where $Q_{0.2,i}$ and $Q_{0.8,i}$ are the lower and upper band values for period $i$, and $\mathbf{1}[\cdot]$ is the indicator function that equals 1 when the condition is true. A coverage of 0.85 on a stated 60\% interval means the band is too wide, which is a form of overconfidence in the uncertainty. A coverage of 0.40 means the band is too narrow and is understating how uncertain the forecast is.
+where $Q_{0.2,i}$ and $Q_{0.8,i}$ are the lower and upper band values for period $i$, and $\mathbf{1}[\cdot]$ is the indicator function that equals 1 when the condition is true. A coverage of 0.85 on a stated 60\% interval means the band is too wide, which is a sign that the model is over-estimating its own uncertainty and being unnecessarily conservative. A coverage of 0.40 means the band is too narrow and is overconfident, understating how uncertain the forecast actually is.
 
 A 60\% interval was chosen deliberately over the more common 80\% or 90\% because for student budgeting, an excessively wide band is not actionable. If the forecast says spending will be between \$400 and \$3{,}200, no useful budget decision can be made from that range. The 60\% interval, presented honestly alongside the coverage explanation in the interface, gives a tighter and more useful planning range.
 
@@ -982,7 +982,7 @@ A 60\% interval was chosen deliberately over the more common 80\% or 90\% becaus
 
 Standard machine learning evaluation uses a held-out test set with many examples. This project faces a structural constraint: each user's transaction history is short. A student who joined three months ago has at most three monthly data points. Evaluating a model on three observations is not statistically meaningful in the same way as a standard benchmark.
 
-The evaluation strategy therefore uses what is available. For users with six or more months of history, the final month is held out as a test period and the model is evaluated on that single month's prediction. For users with fewer than six months, error estimates from the model's own uncertainty output are used as a proxy. Aggregated across many users over time, the per-user single-month holdouts form a meaningful distribution of errors. The table in Section~\ref{tab:model_comparison_placeholder} reserves space for these aggregated results once sufficient transaction histories have accumulated.
+The evaluation strategy therefore uses what is available. For users with six or more months of history, the final month is held out as a test period and the model is evaluated on that single month's prediction. For users with fewer than six months, error estimates from the model's own uncertainty output are used as a proxy. Aggregated across many users over time, the per-user single-month holdouts form a meaningful distribution of errors. The benchmark results in Section~\ref{tab:model_comparison_results} provide an initial comparison using synthetic profiles. These will be supplemented with real per-user holdout results once sufficient transaction histories have accumulated.
 
 A second challenge is that the synthetic covariate anchors introduced into the training sequence are known to the model but not real transactions. Error metrics computed on months that included synthetic anchors should be interpreted differently from months where the model was working from purely observed history.
 
@@ -1227,16 +1227,9 @@ AI forecasting & Complete with caveats & Chronos 2, Prophet, and statistical fal
 Multi currency support & Complete with future improvements & Exchange rate cache and frontend conversion are implemented. More audit work can improve currency consistency. \\ \hline
 AI assistant & Complete baseline & Claude Haiku assistant suggests actions with confirmation. More advanced planning workflows are future work. \\ \hline
 FAQ and resources & Complete baseline & Searchable FAQ, community questions, answers, and moderation are implemented. \\ \hline
-Production deployment & Complete for demo & Vercel, Render, Neon, and ngrok are used. Persistent file storage and stronger production infrastructure are future work. \\ \hline
+Production deployment & Complete for demo & Vercel, Render, Neon, and ngrok are used. Persistent file storage is implemented via Cloudflare R2. Stronger production infrastructure such as Redis and a permanent Chronos 2 host remain future work. \\ \hline
 \end{longtable}
 
-\section{Strengths of the Current System}
-
-The main strength of Spendemic is that the features are connected by a consistent domain model. The app does not only have transactions and a separate model. Transactions feed summaries. Settings feed forecast context. Jobs feed income. Forecast setup feeds reports. Budgets feed alerts. The assistant can understand navigation and financial profile context. The FAQ supports practical resources. This integration makes the application feel like a product rather than a collection of disconnected assignments.
-
-Another strength is transparency. Many AI projects show an output without explaining the input. Spendemic makes missing fields, data sources, warnings, confidence bands, and factor drivers visible. This is important in financial planning, where users need to understand why a recommendation exists.
-
-The third strength is graceful fallback. The application does not depend on a single ideal environment. If Chronos 2 is available, it can be used. If not, Prophet or the statistical fallback keeps the Reports page functional. This is practical engineering.
 
 \section{Weaknesses of the Current System}
 
@@ -1245,45 +1238,8 @@ The current system still has weaknesses. The Chronos 2 model is not deployed as 
 These weaknesses do not invalidate the project. They define the next engineering steps. A project report should not pretend every part is complete. It should explain what works, what is limited, and what should be improved.
 
 
-\section{Known Limitations}
-
-\paragraph*{OTP Persistence.}
-
-OTP codes are stored in process memory. If the backend restarts between OTP request and verification, the code is lost. Redis would be a better production solution.
-
-\paragraph*{Visa Work Hours Local Storage.}
-
-Some weekly visa work hour data is stored in localStorage. This works for a single browser but does not sync across devices. A backend endpoint would make this feature more reliable.
-
-\paragraph*{Synthetic Anchors.}
-
-The Chronos 2 covariate strategy is heuristic. It works as a practical bridge, but it is not the same as a true multivariate forecasting model.
-
-\paragraph*{Loan Projection.}
-
-The loan repayment projection is simplified and does not model interest. It is useful for basic payoff planning, but not for precise amortization.
-
-\section{Living Document Reflection}
-
-The project changed significantly during development. The report should therefore be treated as a living document rather than a final memory dump. The earliest version focused on planned AWS deployment and LSTM benchmarking. The actual implementation became more practical: Vercel, Render, Neon, ngrok, Chronos 2, Prophet, statistical fallback, Claude Haiku, real imports, real authentication, real deployment constraints, and specific bugs.
-
-This evolution is valuable. It shows that the project was not only designed on paper. It was built, tested, corrected, and adapted. The documentation captures that process.
-
 \chapter{Conclusion and Future Work}
 
-Spendemic is a purpose built AI financial planning application for international students. The project addresses a real gap in existing tools. International students need more than generic expense tracking. They need planning that understands currencies, tuition cycles, scholarships, rent, food, travel, academic breaks, visa work limits, and graduation timelines.
-
-\section{Summary of Contributions}
-
-The first contribution is a full stack application that integrates student financial tracking with domain specific context. Users can manage transactions, budgets, goals, imports, forecasts, settings, jobs, FAQ content, and assistant interactions in one system.
-
-The second contribution is the ForecastContext model. This table translates future academic and financial assumptions into structured monthly covariates. It allows the forecasting pipeline to reason about upcoming tuition, rent, food, utilities, travel, health insurance, scholarships, break periods, income, and graduation.
-
-The third contribution is the layered forecasting architecture. Chronos 2 provides the primary AI forecast. Prophet provides a hosted fallback. A custom statistical model ensures that the application can still produce output when AI models are unavailable. This design demonstrates practical resilience.
-
-The fourth contribution is transparency. Spendemic does not simply display a prediction. It shows confidence bands, factor breakdowns, missing fields, data source labels, savings outlook, and warnings. This is important because financial predictions affect real student decisions.
-
-The fifth contribution is honest engineering documentation. The project records bugs, trade offs, deployment constraints, and known limitations instead of hiding them. This makes the report stronger and more useful.
 
 \section{Future Work}
 
@@ -1297,7 +1253,7 @@ Visa work hour tracking should be persisted on the backend instead of relying on
 
 \paragraph*{Formal Model Evaluation.}
 
-After collecting enough transaction history, Chronos 2, Prophet, the statistical fallback, and optional LSTM can be compared using MAE, RMSE, latency, and qualitative usefulness. The placeholder table in Chapter 4 should be filled with real results.
+The benchmark in Chapter 4 provides initial model comparison results using synthetic student profiles. After collecting enough real user transaction history, these results should be supplemented with per-user holdout evaluations using MAE, RMSE, latency, and qualitative usefulness across actual spending patterns.
 
 \paragraph*{Improved Covariate Aware Forecasting.}
 
@@ -1310,8 +1266,6 @@ The AI assistant can be extended to answer deeper financial questions, explain f
 \paragraph*{Expanded Student Resource Hub.}
 
 The FAQ and resource sections can be expanded with official links, university specific guidance, tax deadlines, banking checklists, and scholarship resources. The goal is not to replace official offices, but to make the student's path easier.
-
-\section{Final Remarks}
 
 Spendemic demonstrates that an AI financial planning application becomes more meaningful when it is designed for a specific user group. The project is not only about predicting expenses. It is about understanding the context behind those expenses and giving students a clearer view of the months ahead. By combining full stack development, time series forecasting, AI assistance, multi currency support, and transparent design, Spendemic provides a strong foundation for a practical international student financial guide.
 
