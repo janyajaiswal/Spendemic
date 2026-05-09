@@ -66,7 +66,7 @@ ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 OTP_EXPIRE_MINUTES: int = 5
 
-RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
+BREVO_API_KEY: str = os.getenv("BREVO_API_KEY", "")
 DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
 
 GOOGLE_TOKENINFO_URL: str = "https://oauth2.googleapis.com/tokeninfo"
@@ -115,11 +115,11 @@ def _record_session(db: Session, user_id: Any, jti: str, issued_at: datetime,
 
 def _send_otp_email(to_email: str, name: str, code: str) -> None:
     """Send OTP verification email via Resend. Falls back to terminal log in DEBUG mode."""
-    if not RESEND_API_KEY:
+    if not BREVO_API_KEY:
         if DEBUG:
             print(f"\n{'='*50}\n[DEV] OTP for {to_email}: {code}\n{'='*50}\n", flush=True)
             return
-        raise RuntimeError("RESEND_API_KEY not configured")
+        raise RuntimeError("BREVO_API_KEY not configured")
 
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;">
@@ -145,13 +145,13 @@ def _send_otp_email(to_email: str, name: str, code: str) -> None:
     """
 
     response = httpx.post(
-        "https://api.resend.com/emails",
-        headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+        "https://api.brevo.com/v3/smtp/email",
+        headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json"},
         json={
-            "from": "Spendemic <onboarding@resend.dev>",
-            "to": [to_email],
+            "sender": {"name": "Spendemic", "email": "jaiswaljanya@gmail.com"},
+            "to": [{"email": to_email}],
             "subject": f"{code} — Your Spendemic verification code",
-            "html": html,
+            "htmlContent": html,
         },
         timeout=15,
     )
