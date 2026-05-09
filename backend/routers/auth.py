@@ -127,11 +127,15 @@ def _record_session(db: Session, user_id: Any, jti: str, issued_at: datetime,
 
 def _send_otp_email(to_email: str, name: str, code: str) -> None:
     """Send OTP verification email via SMTP. Falls back to terminal log in DEBUG mode."""
+    print(f"[SMTP] configured={_smtp_configured()} user={SMTP_USER!r} debug={DEBUG}", flush=True)
+
     if not _smtp_configured():
         if DEBUG:
             print(f"\n{'='*50}\n[DEV] OTP for {to_email}: {code}\n{'='*50}\n", flush=True)
             return
-        raise RuntimeError("SMTP credentials not configured in .env")
+        raise RuntimeError(
+            f"SMTP not configured — SMTP_USER={SMTP_USER!r} SMTP_PASSWORD={'set' if SMTP_PASSWORD else 'empty'}"
+        )
 
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;">
@@ -162,10 +166,18 @@ def _send_otp_email(to_email: str, name: str, code: str) -> None:
     msg["To"] = to_email
     msg.attach(MIMEText(html, "html"))
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-        server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
-        server.sendmail(SMTP_USER, to_email, msg.as_string())
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(SMTP_USER, to_email, msg.as_string())
+        print(f"[SMTP] Email sent successfully to {to_email}", flush=True)
+    except smtplib.SMTPAuthenticationError as e:
+        print(f"[SMTP] Auth failed: {e}", flush=True)
+        raise RuntimeError("Gmail authentication failed — check your App Password in Render env vars")
+    except Exception as e:
+        print(f"[SMTP] Send failed: {e}", flush=True)
+        raise RuntimeError(f"Email send failed: {e}")
 
 
 async def _verify_google_token(credential: str) -> dict[str, Any]:
