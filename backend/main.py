@@ -6,14 +6,12 @@ import os
 import sys
 import threading
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from dotenv import load_dotenv
 load_dotenv()  # must run before any router import reads os.getenv at module level
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from routers import users, auth
 from routers import transactions
@@ -87,10 +85,6 @@ app.include_router(goals.router)
 app.include_router(faq.router)
 app.include_router(chat.router)
 
-# Serve uploaded files (avatars, etc.)
-_uploads_dir = Path(__file__).parent / "uploads"
-_uploads_dir.mkdir(exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(_uploads_dir)), name="uploads")
 
 @app.get("/")
 async def root():

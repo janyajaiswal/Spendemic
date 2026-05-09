@@ -10,9 +10,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 from typing import List, Optional
 from uuid import UUID
-from pathlib import Path
-
-from fastapi import APIRouter, Depends, HTTPException, Request, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -20,9 +18,8 @@ from database import get_db
 from models import User
 from schemas import UserCreate, UserUpdate, UserResponse, NotificationPreferencesUpdate, LoanProjectionResponse, LoanMonthPoint
 from routers.auth import get_current_user
+import storage
 
-UPLOADS_DIR = Path(__file__).parent.parent / "uploads" / "avatars"
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 MAX_AVATAR_BYTES = 5 * 1024 * 1024  # 5 MB
 
@@ -59,7 +56,6 @@ async def update_me(
 
 @router.post("/me/avatar", response_model=UserResponse, summary="Upload profile picture")
 async def upload_avatar(
-    request: Request,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -76,11 +72,8 @@ async def upload_avatar(
             detail="Image must be under 5 MB",
         )
     ext = file.content_type.split("/")[1].replace("jpeg", "jpg")
-    filename = f"{current_user.id}.{ext}"
-    dest = UPLOADS_DIR / filename
-    dest.write_bytes(contents)
-    base_url = str(request.base_url).rstrip("/")
-    current_user.profile_picture_url = f"{base_url}/uploads/avatars/{filename}"
+    key = f"avatars/{current_user.id}.{ext}"
+    current_user.profile_picture_url = storage.upload_file(contents, key, file.content_type)
     db.commit()
     db.refresh(current_user)
     return current_user

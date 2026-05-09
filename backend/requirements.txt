@@ -18,5 +18,6 @@ anthropic
 openai
 better-profanity
 resend
+boto3
 torch
 git+https://github.com/amazon-science/chronos-forecasting.git

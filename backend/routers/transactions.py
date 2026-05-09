@@ -10,12 +10,11 @@ import uuid as uuid_lib
 from calendar import monthrange
 from datetime import date, timedelta
 from decimal import Decimal
-from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
 from dateutil.relativedelta import relativedelta
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
@@ -25,9 +24,8 @@ from models import Transaction, TransactionTypeEnum, CategoryEnum, RecurringFreq
 from routers.auth import get_current_user
 from routers.exchange_rates import _FALLBACK_RATES
 from schemas import TransactionCreate, TransactionUpdate, TransactionResponse, TransactionSummary, WeeklyTransactionSummary, ReceiptUploadResponse
+import storage
 
-RECEIPTS_DIR = Path(__file__).parent.parent / "uploads" / "receipts"
-RECEIPTS_DIR.mkdir(parents=True, exist_ok=True)
 ALLOWED_RECEIPT_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 MAX_RECEIPT_BYTES = 10 * 1024 * 1024  # 10 MB
 
@@ -370,7 +368,6 @@ def delete_transaction(
 @router.post("/{transaction_id}/receipt", response_model=ReceiptUploadResponse)
 async def upload_receipt(
     transaction_id: UUID,
-    request: Request,
     file: UploadFile = File(...),
     current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -384,19 +381,13 @@ async def upload_receipt(
     if len(contents) > MAX_RECEIPT_BYTES:
         raise HTTPException(status_code=413, detail="Receipt image must be under 10 MB")
 
-    user_dir = RECEIPTS_DIR / str(current_user.id)
-    user_dir.mkdir(parents=True, exist_ok=True)
     ext = file.content_type.split("/")[1].replace("jpeg", "jpg")
-    filename = f"{transaction_id}.{ext}"
-    (user_dir / filename).write_bytes(contents)
-
-    base_url = str(request.base_url).rstrip("/")
-    receipt_url = f"{base_url}/uploads/receipts/{current_user.id}/{filename}"
+    key = f"receipts/{current_user.id}/{transaction_id}.{ext}"
+    receipt_url = storage.upload_file(contents, key, file.content_type)
 
     tx.receipt_url = receipt_url
     db.commit()
 
-    # Attempt LLM category suggestion from description + filename heuristic
     suggested_category = _guess_category_from_description(tx.description or file.filename or "")
 
     return ReceiptUploadResponse(
