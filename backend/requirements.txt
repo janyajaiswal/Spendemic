@@ -17,5 +17,6 @@ prophet
 anthropic
 openai
 better-profanity
+resend
 torch
 git+https://github.com/amazon-science/chronos-forecasting.git

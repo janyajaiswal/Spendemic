@@ -6,11 +6,8 @@ from __future__ import annotations
 import os
 import uuid
 import secrets
-import smtplib
 import threading
 from datetime import datetime, timezone, timedelta
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 from typing import Any
 
 import httpx
@@ -69,17 +66,8 @@ ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 OTP_EXPIRE_MINUTES: int = 5
 
-SMTP_HOST: str = os.getenv("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT: int = int(os.getenv("SMTP_PORT", "587"))
-SMTP_USER: str = os.getenv("SMTP_USER", "")
-SMTP_PASSWORD: str = os.getenv("SMTP_PASSWORD", "")
-SMTP_FROM_NAME: str = os.getenv("SMTP_FROM_NAME", "Spendemic")
+RESEND_API_KEY: str = os.getenv("RESEND_API_KEY", "")
 DEBUG: bool = os.getenv("DEBUG", "False").lower() == "true"
-
-_SMTP_PLACEHOLDER = {"", "your-gmail@gmail.com", "your-app-password"}
-
-def _smtp_configured() -> bool:
-    return SMTP_USER not in _SMTP_PLACEHOLDER and SMTP_PASSWORD not in _SMTP_PLACEHOLDER
 
 GOOGLE_TOKENINFO_URL: str = "https://oauth2.googleapis.com/tokeninfo"
 
@@ -126,20 +114,16 @@ def _record_session(db: Session, user_id: Any, jti: str, issued_at: datetime,
 
 
 def _send_otp_email(to_email: str, name: str, code: str) -> None:
-    """Send OTP verification email via SMTP. Falls back to terminal log in DEBUG mode."""
-    print(f"[SMTP] configured={_smtp_configured()} user={SMTP_USER!r} debug={DEBUG}", flush=True)
-
-    if not _smtp_configured():
+    """Send OTP verification email via Resend API. Falls back to terminal log in DEBUG mode."""
+    if not RESEND_API_KEY:
         if DEBUG:
             print(f"\n{'='*50}\n[DEV] OTP for {to_email}: {code}\n{'='*50}\n", flush=True)
             return
-        raise RuntimeError(
-            f"SMTP not configured — SMTP_USER={SMTP_USER!r} SMTP_PASSWORD={'set' if SMTP_PASSWORD else 'empty'}"
-        )
+        raise RuntimeError("RESEND_API_KEY not configured")
 
     html = f"""
     <div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;">
-      <div style="background:#6b1a2a;padding:24px;border-radius:12px 12px 0 0;text-align:center;">
+      <div style="background:#0e4c49;padding:24px;border-radius:12px 12px 0 0;text-align:center;">
         <h1 style="color:#ffd700;margin:0;font-size:28px;">Spendemic</h1>
       </div>
       <div style="background:#f9f9f9;padding:32px;border-radius:0 0 12px 12px;border:1px solid #eee;">
@@ -147,7 +131,7 @@ def _send_otp_email(to_email: str, name: str, code: str) -> None:
         <p style="color:#555;">Your verification code for Spendemic is:</p>
         <div style="text-align:center;margin:28px 0;">
           <span style="font-size:40px;font-weight:700;letter-spacing:10px;
-                       color:#6b1a2a;background:#fff3cd;padding:12px 24px;
+                       color:#0e4c49;background:#fff3cd;padding:12px 24px;
                        border-radius:8px;border:2px dashed #ffd700;">
             {code}
           </span>
@@ -160,30 +144,19 @@ def _send_otp_email(to_email: str, name: str, code: str) -> None:
     </div>
     """
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"{code} — Your Spendemic verification code"
-    msg["From"] = f"{SMTP_FROM_NAME} <{SMTP_USER}>"
-    msg["To"] = to_email
-    msg.attach(MIMEText(html, "html"))
-
-    try:
-        # Port 465 with SSL_SMTP avoids STARTTLS which some hosts block
-        if SMTP_PORT == 465:
-            with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-                server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_USER, to_email, msg.as_string())
-        else:
-            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
-                server.starttls()
-                server.login(SMTP_USER, SMTP_PASSWORD)
-                server.sendmail(SMTP_USER, to_email, msg.as_string())
-        print(f"[SMTP] Email sent successfully to {to_email}", flush=True)
-    except smtplib.SMTPAuthenticationError as e:
-        print(f"[SMTP] Auth failed: {e}", flush=True)
-        raise RuntimeError("Gmail authentication failed — check your App Password in Render env vars")
-    except Exception as e:
-        print(f"[SMTP] Send failed: {e}", flush=True)
-        raise RuntimeError(f"Email send failed: {e}")
+    response = httpx.post(
+        "https://api.resend.com/emails",
+        headers={"Authorization": f"Bearer {RESEND_API_KEY}"},
+        json={
+            "from": "Spendemic <onboarding@resend.dev>",
+            "to": [to_email],
+            "subject": f"{code} — Your Spendemic verification code",
+            "html": html,
+        },
+        timeout=15,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f"Email send failed: {response.text}")
 
 
 async def _verify_google_token(credential: str) -> dict[str, Any]:
