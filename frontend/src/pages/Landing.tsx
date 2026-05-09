@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Bot, TrendingUp, DollarSign, Bell, GraduationCap, BookOpen, Users } from 'lucide-react';
+import { Bot, TrendingUp, DollarSign, Bell } from 'lucide-react';
 import '../styles/landing.css';
 
 const features = [
